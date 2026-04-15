@@ -2,6 +2,7 @@
 import DashboardLayout from '$layouts/DashboardLayout.astro'
 import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
 import { getAuthedClient } from '$lib/server/studentvue'
+import X from 'lucide-svelte/icons/x'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
@@ -157,8 +158,13 @@ const fullAddress = addressParts.join('\n')
 						<p id="staff-modal-name" class="truncate text-2xl font-semibold tracking-tight">Staff member</p>
 						<p id="staff-modal-title" class="mt-1 text-sm text-muted-foreground">N/A</p>
 					</div>
-					<button type="button" data-staff-modal-close class="inline-flex size-10 items-center justify-center rounded-2xl text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-white" aria-label="Close staff details">
-						×
+					<button
+						type="button"
+						data-staff-modal-close
+						class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-foreground transition-colors hover:bg-white/[0.08]"
+						aria-label="Close staff details"
+					>
+						<X class="h-4 w-4" />
 					</button>
 				</div>
 				<div class="mt-5 grid gap-3">

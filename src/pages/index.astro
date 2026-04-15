@@ -1,6 +1,14 @@
 ---
+import { ViewTransitions } from 'astro:transitions'
+import ArrowRight from 'lucide-svelte/icons/arrow-right'
+import ChevronLeft from 'lucide-svelte/icons/chevron-left'
+import ChevronRight from 'lucide-svelte/icons/chevron-right'
+import Github from 'lucide-svelte/icons/github'
+import ShieldCheck from 'lucide-svelte/icons/shield-check'
+import Sparkles from 'lucide-svelte/icons/sparkles'
 import DashboardLayout from '$layouts/DashboardLayout.astro'
 import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+import '../styles/globals.css'
 
 const resolveCoursePeriod = (course, fallbackIndex) => {
 	const raw = course?.Period ?? course?._Period
@@ -23,125 +31,793 @@ const getGradeAccent = (value) => {
 	return 'rgb(248, 113, 113)'
 }
 
-if (!Astro.locals.user) return Astro.redirect('/login')
-const period = readSelectedPeriod(Astro.cookies)
-const data = await loadDashboard(Astro.locals, period)
-const courses = data.gradebook?.Courses?.Course ?? []
-const recentAssignments = (data.gradebook?.assignments ?? []).filter((a) => a.scorePercent >= 0).slice(0, 8)
-const missingAssignments = courses.reduce((sum, course) => sum + Number(course.missingCount ?? 0), 0)
-const stats = [
-	{ label: 'Current average', value: data.gradebook?.average ?? '-', style: `color: ${getGradeAccent(data.gradebook?.average)};` },
-	{ label: 'This week', value: data.gradebook?.week?.average ?? '-', style: `color: ${getGradeAccent(data.gradebook?.week?.average)};` },
-	{ label: 'Assignments this week', value: String(data.gradebook?.week?.length ?? 0), style: '' },
-	{ label: 'Days left', value: String(Math.max(data.gradebook?.days ?? 0, 0)), style: '' }
+let dashboardData = null
+let courses = []
+let recentAssignments = []
+let missingAssignments = 0
+let stats = []
+
+if (Astro.locals.user) {
+	const period = readSelectedPeriod(Astro.cookies)
+	dashboardData = await loadDashboard(Astro.locals, period)
+	courses = dashboardData.gradebook?.Courses?.Course ?? []
+	recentAssignments = (dashboardData.gradebook?.assignments ?? [])
+		.filter((a) => a.scorePercent >= 0)
+		.slice(0, 8)
+	missingAssignments = courses.reduce((sum, course) => sum + Number(course.missingCount ?? 0), 0)
+	stats = [
+		{
+			label: 'Current average',
+			value: dashboardData.gradebook?.average ?? '-',
+			style: `color: ${getGradeAccent(dashboardData.gradebook?.average)};`
+		},
+		{
+			label: 'This week',
+			value: dashboardData.gradebook?.week?.average ?? '-',
+			style: `color: ${getGradeAccent(dashboardData.gradebook?.week?.average)};`
+		},
+		{
+			label: 'Assignments this week',
+			value: String(dashboardData.gradebook?.week?.length ?? 0),
+			style: ''
+		},
+		{
+			label: 'Days left',
+			value: String(Math.max(dashboardData.gradebook?.days ?? 0, 0)),
+			style: ''
+		}
+	]
+}
+
+const previewCards = [
+	{
+		title: 'Home dashboard',
+		text: 'Your main view pulls together live grades, recent assignments, and the week at a glance without portal clutter.',
+		image: '/home-preview.png',
+		alt: 'Home preview'
+	},
+	{
+		title: 'Focused gradebook',
+		text: 'A sharper class list and cleaner reporting period flow make checking progress feel much faster.',
+		image: '/gradebook-preview.png',
+		alt: 'Gradebook preview'
+	},
+	{
+		title: 'Gradebook at a glance',
+		text: 'Faster snapshots for current classes, missing work, and period changes.',
+		image: '/grades-preview.png',
+		alt: 'Grades preview'
+	},
+	{
+		title: 'Assignment tracking',
+		text: 'Browse graded work in one place with cleaner scan paths and less visual noise.',
+		image: '/assignments-preview.png',
+		alt: 'Assignments preview'
+	},
+	{
+		title: 'Attendance that reads clearly',
+		text: 'Period-by-period history with charting that is actually easy to scan.',
+		image: '/attendance-preview.png',
+		alt: 'Attendance preview'
+	},
+	{
+		title: 'What-if planning',
+		text: 'Model final outcomes before assignments or exams land in StudentVUE.',
+		image: '/hypothetical-preview.png',
+		alt: 'Hypothetical grade planning preview'
+	}
 ]
 ---
-<DashboardLayout title={`Home`} currentPath="/" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod} showPeriodSelector={true}>
-	<div class="grid grid-cols-4 gap-2 sm:gap-4">
-		{stats.map((stat) => (
-			<section class="min-w-0 rounded-[1.25rem] border border-border/70 bg-card/60 p-3 sm:rounded-[1.75rem] sm:p-5">
-				<p class="text-[0.7rem] leading-tight text-muted-foreground sm:text-sm">{stat.label}</p>
-				<p class="mt-2 truncate font-mono text-lg font-semibold tracking-tight sm:mt-3 sm:text-3xl" style={stat.style}>{stat.value}</p>
-			</section>
-		))}
-	</div>
 
-	<div class="mt-6 grid gap-4 xl:grid-cols-[1.35fr,1fr]">
-		<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="gradebook-panel">
-			<div class="flex items-center justify-between gap-3 p-6">
-				<h2 class="text-xl font-semibold">Grades</h2>
-				<p class="font-mono text-sm text-muted-foreground">{missingAssignments} missing</p>
-			</div>
-			<div class="overflow-x-auto px-6 pb-6">
-				<table class="w-full text-left text-sm">
-					<thead class="text-muted-foreground">
-						<tr>
-							<th class="px-4 pb-3 font-medium">Course</th>
-							<th class="px-4 pb-3 font-medium">Teacher</th>
-							<th class="px-4 pb-3 text-right font-medium">Grade</th>
-						</tr>
-					</thead>
-					<tbody>
-						{courses.map((course, i) => {
-							const coursePeriod = resolveCoursePeriod(course, i)
-							return (
-								<tr
-									class="cursor-pointer border-t border-border/60 transition-colors hover:bg-background/40"
-									data-row-link
-									data-href={`/period/${coursePeriod}`}
-									tabindex="0"
-									onclick={`window.location.assign('/period/${coursePeriod}')`}
-								>
-									<td class="px-4 py-4">
-										<div class="px-2 py-1" transition:name={`course-card-${data.selectedPeriod}-${coursePeriod}`}>
-											<div class="font-medium">{course.Title}</div>
-											<div class="mt-1 text-xs text-muted-foreground">
-												{course.CourseID ?? course._CourseID ?? 'Course'} • Period {course.Period ?? course._Period ?? '-'} • Room {course.Room ?? course._Room ?? '-'}
+{Astro.locals.user ? (
+	<DashboardLayout title={`Home`} currentPath="/" student={dashboardData.student} periodDates={dashboardData.periodDates} selectedPeriod={dashboardData.selectedPeriod} showPeriodSelector={true}>
+		<div class="grid grid-cols-4 gap-2 sm:gap-4">
+			{stats.map((stat) => (
+				<section class="min-w-0 rounded-[1.25rem] border border-border/70 bg-card/60 p-3 sm:rounded-[1.75rem] sm:p-5">
+					<p class="text-[0.7rem] leading-tight text-muted-foreground sm:text-sm">{stat.label}</p>
+					<p class="mt-2 truncate font-mono text-lg font-semibold tracking-tight sm:mt-3 sm:text-3xl" style={stat.style}>{stat.value}</p>
+				</section>
+			))}
+		</div>
+
+		<div class="mt-6 grid gap-4 xl:grid-cols-[1.35fr,1fr]">
+			<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="gradebook-panel">
+				<div class="flex items-center justify-between gap-3 p-6">
+					<h2 class="text-xl font-semibold">Grades</h2>
+					<p class="font-mono text-sm text-muted-foreground">{missingAssignments} missing</p>
+				</div>
+				<div class="overflow-x-auto px-6 pb-6">
+					<table class="w-full text-left text-sm">
+						<thead class="text-muted-foreground">
+							<tr>
+								<th class="px-4 pb-3 font-medium">Course</th>
+								<th class="px-4 pb-3 font-medium">Teacher</th>
+								<th class="px-4 pb-3 text-right font-medium">Grade</th>
+							</tr>
+						</thead>
+						<tbody>
+							{courses.map((course, i) => {
+								const coursePeriod = resolveCoursePeriod(course, i)
+								return (
+									<tr
+										class="cursor-pointer border-t border-border/60 transition-colors hover:bg-background/40"
+										data-row-link
+										data-href={`/period/${coursePeriod}`}
+										tabindex="0"
+										onclick={`window.location.assign('/period/${coursePeriod}')`}
+									>
+										<td class="px-4 py-4">
+											<div class="px-2 py-1" transition:name={`course-card-${dashboardData.selectedPeriod}-${coursePeriod}`}>
+												<div class="font-medium">{course.Title}</div>
+												<div class="mt-1 text-xs text-muted-foreground">
+													{course.CourseID ?? course._CourseID ?? 'Course'} • Period {course.Period ?? course._Period ?? '-'} • Room {course.Room ?? course._Room ?? '-'}
+												</div>
 											</div>
-										</div>
+										</td>
+										<td class="px-4 py-4 text-muted-foreground">
+											<div>{course.Staff ?? course._Staff ?? 'Teacher unavailable'}</div>
+											<div class="mt-1 text-xs">{course.StaffEMail ?? course._StaffEMail ?? ''}</div>
+										</td>
+										<td class="px-4 py-4 text-right">
+											<div
+												class="text-2xl font-semibold"
+												style={`color: ${course.color ?? getGradeAccent(course.scorePercent ?? course.score)};`}
+											>
+												{course.scoreString}
+											</div>
+											<div class="font-mono text-sm text-muted-foreground">{course.score}</div>
+										</td>
+									</tr>
+								)
+							})}
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="recent-assignments-panel">
+				<div class="flex items-center justify-between gap-3 p-6">
+					<h2 class="text-xl font-semibold">Recent assignments</h2>
+					<a
+						href="/assignments"
+						class="inline-flex items-center justify-center rounded-full border border-border/70 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-background/50 hover:text-foreground"
+					>
+						View all
+					</a>
+				</div>
+				<div class="overflow-x-auto px-6 pb-6">
+					<table class="w-full text-left text-sm">
+						<thead class="text-muted-foreground">
+							<tr>
+								<th class="px-4 pb-3 font-medium">Assignment</th>
+								<th class="px-4 pb-3 font-medium">Course</th>
+								<th class="px-4 pb-3 text-right font-medium">Result</th>
+							</tr>
+						</thead>
+						<tbody>
+							{recentAssignments.map((assignment) => (
+								<tr class="border-t border-border/60">
+									<td class="px-4 py-4">
+										<div class="font-medium">{assignment.Measure}</div>
+										<div class="font-mono text-xs text-muted-foreground">{assignment.DueDate}</div>
 									</td>
-									<td class="px-4 py-4 text-muted-foreground">
-										<div>{course.Staff ?? course._Staff ?? 'Teacher unavailable'}</div>
-										<div class="mt-1 text-xs">{course.StaffEMail ?? course._StaffEMail ?? ''}</div>
-									</td>
+									<td class="px-4 py-4 text-muted-foreground">{assignment.course}</td>
 									<td class="px-4 py-4 text-right">
 										<div
-											class="text-2xl font-semibold"
-											style={`color: ${course.color ?? getGradeAccent(course.scorePercent ?? course.score)};`}
+											class="font-mono font-semibold"
+											style={`color: ${assignment.style?.replace?.('color: ', '').replace?.(';', '') ?? getGradeAccent(assignment.scorePercent ?? assignment.percent)};`}
 										>
-											{course.scoreString}
+											{assignment.percent}
 										</div>
-										<div class="font-mono text-sm text-muted-foreground">{course.score}</div>
+										<div class="font-mono text-xs text-muted-foreground">{assignment.score}</div>
 									</td>
 								</tr>
-							)
-						})}
-					</tbody>
-				</table>
-			</div>
-		</section>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</section>
+		</div>
+	</DashboardLayout>
+) : (
+	<Fragment>
+		<head>
+			<meta charset="utf-8" />
+			<meta name="viewport" content="width=device-width, initial-scale=1" />
+			<title>GradeGoblin</title>
+			<meta
+				name="description"
+				content="A cleaner StudentVUE dashboard for grades, assignments, attendance, documents, tests, and what-if planning."
+			/>
+			<link rel="icon" href="/favicon-64.png?v=2" type="image/png" />
+			<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+			<link rel="stylesheet" href="/font/font.css" />
+			<ViewTransitions />
+		</head>
+		<main class="landing-root landing-body">
+				<section class="landing-hero">
+					<div class="landing-copy">
+						<div class="landing-brand">
+							<img src="/pwa-512.png" alt="GradeGoblin logo" class="landing-brand-mark" />
+							<span>GradeGoblin</span>
+						</div>
+						<h1>StudentVUE, rebuilt to feel calm, quick, and actually useful.</h1>
+						<p class="landing-lede">
+							Check grades, track attendance, review documents, and plan outcomes in one cleaner interface without the usual portal clutter.
+						</p>
+						<div class="landing-actions">
+							<a href="/login" class="landing-button landing-button-primary">
+								Open app
+								<ArrowRight class="h-4 w-4" />
+							</a>
+							<a href="https://github.com/T3M1N4L/gradegoblin" target="_blank" rel="noreferrer" class="landing-button landing-button-secondary">
+								<Github class="h-4 w-4" />
+								View GitHub
+							</a>
+						</div>
+						<div class="landing-meta">
+							<div>
+								<ShieldCheck class="h-4 w-4" />
+								<span>Direct district login flow</span>
+							</div>
+							<div>
+								<Sparkles class="h-4 w-4" />
+								<span>Grade planning, assignments, tests, and attendance</span>
+							</div>
+						</div>
+					</div>
 
-		<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="recent-assignments-panel">
-			<div class="flex items-center justify-between gap-3 p-6">
-				<h2 class="text-xl font-semibold">Recent assignments</h2>
-				<a
-					href="/assignments"
-					class="inline-flex items-center justify-center rounded-full border border-border/70 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-background/50 hover:text-foreground"
-				>
-					View all
-				</a>
-			</div>
-			<div class="overflow-x-auto px-6 pb-6">
-				<table class="w-full text-left text-sm">
-					<thead class="text-muted-foreground">
-						<tr>
-							<th class="px-4 pb-3 font-medium">Assignment</th>
-							<th class="px-4 pb-3 font-medium">Course</th>
-							<th class="px-4 pb-3 text-right font-medium">Result</th>
-						</tr>
-					</thead>
-					<tbody>
-						{recentAssignments.map((assignment) => (
-							<tr class="border-t border-border/60">
-								<td class="px-4 py-4">
-									<div class="font-medium">{assignment.Measure}</div>
-									<div class="font-mono text-xs text-muted-foreground">{assignment.DueDate}</div>
-								</td>
-								<td class="px-4 py-4 text-muted-foreground">{assignment.course}</td>
-								<td class="px-4 py-4 text-right">
-									<div
-										class="font-mono font-semibold"
-										style={`color: ${assignment.style?.replace?.('color: ', '').replace?.(';', '') ?? getGradeAccent(assignment.scorePercent ?? assignment.percent)};`}
-									>
-										{assignment.percent}
+						<div class="landing-stage">
+							<div class="hero-carousel-shell" data-hero-carousel data-cards={JSON.stringify(previewCards)}>
+								<div class="hero-carousel-stage">
+									<div class="hero-carousel-frame">
+										<img
+											src={previewCards[0].image}
+											alt={previewCards[0].alt}
+											data-hero-carousel-image
+										/>
+										<div class="hero-carousel-controls">
+											<button type="button" class="hero-carousel-button" data-hero-carousel-prev aria-label="Previous preview">
+												<ChevronLeft class="h-4 w-4" />
+											</button>
+											<div class="hero-carousel-dots" aria-label="Preview slide indicators">
+												{previewCards.map((card, index) => (
+													<button
+														type="button"
+														class={`hero-carousel-dot${index === 0 ? ' is-active' : ''}`}
+														data-hero-carousel-dot
+														data-index={index}
+														aria-label={`Go to ${card.title}`}
+														aria-current={index === 0 ? 'true' : 'false'}
+													></button>
+												))}
+											</div>
+											<button type="button" class="hero-carousel-button" data-hero-carousel-next aria-label="Next preview">
+												<ChevronRight class="h-4 w-4" />
+											</button>
+										</div>
 									</div>
-									<div class="font-mono text-xs text-muted-foreground">{assignment.score}</div>
-								</td>
-							</tr>
-						))}
-					</tbody>
-				</table>
-			</div>
-		</section>
-	</div>
-</DashboardLayout>
+								</div>
+								<div class="hero-carousel-footer">
+									<p data-hero-carousel-description>{previewCards[0].text}</p>
+								</div>
+							</div>
+						</div>
+					</section>
+		</main>
+	</Fragment>
+)}
+
+<style is:inline>
+	.landing-body {
+		margin: 0;
+		background:
+			radial-gradient(circle at top left, rgba(43, 120, 105, 0.1), transparent 24%),
+			radial-gradient(circle at 86% 14%, rgba(66, 82, 160, 0.12), transparent 20%),
+			radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.03), transparent 34%),
+			linear-gradient(180deg, #000000 0%, #010204 54%, #030406 100%);
+		color: #f3f1ec;
+	}
+
+	.landing-root {
+		min-height: 100svh;
+		padding: 18px 18px 18px;
+		overflow: clip;
+	}
+
+	.landing-hero {
+		max-width: 1540px;
+		margin: 0 auto;
+	}
+
+	.landing-hero {
+		display: grid;
+		grid-template-columns: minmax(320px, 0.58fr) minmax(0, 1.42fr);
+		align-items: center;
+		gap: 22px;
+		min-height: calc(100svh - 36px);
+	}
+
+	.landing-copy {
+		max-width: 430px;
+		animation: landing-rise 680ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	.landing-brand {
+		display: inline-flex;
+		align-items: center;
+		gap: 12px;
+		padding: 0;
+		font-size: 0.9rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+	}
+
+	.landing-brand-mark {
+		height: 34px;
+		width: 34px;
+		object-fit: cover;
+	}
+
+	.landing-copy h1 {
+		margin: 16px 0 0;
+		font-size: clamp(2.85rem, 4.5vw, 4.5rem);
+		line-height: 0.96;
+		letter-spacing: -0.06em;
+		max-width: 9ch;
+	}
+
+	.landing-lede {
+		margin: 14px 0 0;
+		max-width: 28rem;
+		font-size: 0.96rem;
+		line-height: 1.58;
+		color: rgba(243, 241, 236, 0.68);
+	}
+
+	.landing-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 14px;
+		margin-top: 22px;
+	}
+
+	.landing-button {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		height: 50px;
+		padding: 0 22px;
+		border-radius: 999px;
+		text-decoration: none;
+		font-size: 0.96rem;
+		font-weight: 600;
+		transition:
+			transform 180ms ease,
+			box-shadow 180ms ease,
+			background-color 180ms ease,
+			border-color 180ms ease;
+	}
+
+	.landing-button:hover {
+		transform: translateY(-1px);
+	}
+
+	.landing-button-primary {
+		background: #f3f1ec;
+		color: #101216;
+		box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+	}
+
+	.landing-button-secondary {
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: rgba(255, 255, 255, 0.04);
+		color: #f3f1ec;
+	}
+
+	.landing-meta {
+		display: grid;
+		gap: 10px;
+		margin-top: 18px;
+		color: rgba(243, 241, 236, 0.6);
+		font-size: 0.88rem;
+	}
+
+	.landing-meta div {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	.landing-stage {
+		position: relative;
+		min-height: min(86svh, 840px);
+		animation: landing-float-in 760ms cubic-bezier(0.22, 1, 0.36, 1) both;
+	}
+
+	.hero-carousel-shell {
+		display: grid;
+		grid-template-rows: minmax(0, 1fr) auto;
+		gap: 10px;
+		height: 100%;
+	}
+
+	.hero-carousel-stage {
+		position: relative;
+		height: 100%;
+		min-height: min(82svh, 800px);
+	}
+
+	.hero-carousel-frame {
+		overflow: hidden;
+		border-radius: 34px;
+	}
+
+	.hero-carousel-frame {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0;
+		background: transparent;
+		border-radius: 34px;
+		height: 100%;
+	}
+
+	.hero-carousel-frame img {
+		display: block;
+		width: auto;
+		max-width: min(108%, 1180px);
+		height: auto;
+		max-height: min(74svh, 760px);
+		object-fit: contain;
+		object-position: center;
+		border-radius: 34px;
+		opacity: 1;
+		transform: scale(1);
+		transition:
+			opacity 280ms ease,
+			transform 420ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+
+	.hero-carousel-frame img.is-transitioning {
+		opacity: 0.35;
+		transform: scale(0.985);
+	}
+
+	.hero-carousel-footer {
+		padding: 0 6px;
+		width: 100%;
+	}
+
+	.hero-carousel-footer p {
+		margin: 0;
+		max-width: var(--hero-caption-width, 100%);
+		padding-left: var(--hero-caption-offset, 0px);
+		font-size: 0.92rem;
+		line-height: 1.55;
+		color: rgba(243, 241, 236, 0.56);
+	}
+
+	.hero-carousel-controls {
+		position: absolute;
+		inset: 0;
+		pointer-events: none;
+		z-index: 5;
+	}
+
+	.hero-carousel-button {
+		position: absolute;
+		top: calc(50% - 22px);
+		pointer-events: auto;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		border-radius: 999px;
+		background: rgba(8, 10, 14, 0.72);
+		color: rgba(243, 241, 236, 0.9);
+		font-size: 1rem;
+		backdrop-filter: blur(14px);
+		transition:
+			background-color 180ms ease,
+			transform 180ms ease,
+			border-color 180ms ease;
+	}
+
+	.hero-carousel-button[data-hero-carousel-prev] {
+		left: 12px;
+	}
+
+	.hero-carousel-button[data-hero-carousel-next] {
+		right: 12px;
+	}
+
+	.hero-carousel-button:hover {
+		transform: translateY(-1px);
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.hero-carousel-button:disabled {
+		opacity: 0.5;
+	}
+
+	.hero-carousel-dots {
+		position: absolute;
+		left: 50%;
+		bottom: 18px;
+		transform: translateX(-50%);
+		pointer-events: auto;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+		padding: 10px 14px;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		border-radius: 999px;
+		background: rgba(8, 10, 14, 0.68);
+		backdrop-filter: blur(14px);
+	}
+
+	.hero-carousel-dot {
+		width: 8px;
+		height: 8px;
+		padding: 0;
+		border: 0;
+		border-radius: 999px;
+		background: rgba(243, 241, 236, 0.22);
+		transition:
+			width 180ms ease,
+			background-color 180ms ease,
+			transform 180ms ease;
+	}
+
+	.hero-carousel-dot.is-active {
+		width: 28px;
+		background: rgba(243, 241, 236, 0.9);
+	}
+
+	@keyframes landing-rise {
+		from {
+			opacity: 0;
+			transform: translateY(18px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	@keyframes landing-float-in {
+		from {
+			opacity: 0;
+			transform: translateY(24px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
+
+	@media (max-width: 1120px) {
+		.landing-hero {
+			grid-template-columns: 1fr;
+			min-height: auto;
+		}
+
+		.landing-stage {
+			min-height: 760px;
+		}
+
+		.hero-carousel-stage {
+			min-height: 720px;
+		}
+	}
+
+	@media (max-width: 780px) {
+		.landing-root {
+			padding: 18px 14px 28px;
+			overflow: visible;
+		}
+
+		.landing-hero {
+			gap: 20px;
+			min-height: auto;
+			padding-top: 4px;
+			grid-template-columns: 1fr;
+		}
+
+		.landing-copy h1 {
+			max-width: none;
+			font-size: clamp(2.35rem, 11.5vw, 3.3rem);
+			line-height: 0.98;
+		}
+
+		.landing-copy {
+			max-width: none;
+		}
+
+		.landing-lede {
+			max-width: none;
+			font-size: 0.94rem;
+			line-height: 1.55;
+		}
+
+		.landing-actions {
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 10px;
+		}
+
+		.landing-button {
+			width: 100%;
+			height: 48px;
+		}
+
+		.landing-meta {
+			gap: 8px;
+			font-size: 0.82rem;
+		}
+
+		.landing-stage {
+			min-height: auto;
+		}
+
+		.hero-carousel-stage {
+			min-height: 520px;
+		}
+
+		.hero-carousel-frame {
+			min-height: 0;
+			padding: 0;
+			border-radius: 20px;
+		}
+
+		.hero-carousel-frame img {
+			width: 100%;
+			max-width: 100%;
+			max-height: none;
+			border-radius: 20px;
+		}
+
+		.hero-carousel-footer {
+			padding-inline: 2px;
+		}
+
+		.hero-carousel-footer p {
+			max-width: 100%;
+			font-size: 0.86rem;
+			line-height: 1.5;
+		}
+
+		.hero-carousel-button {
+			top: calc(50% - 19px);
+			width: 36px;
+			height: 36px;
+			background: rgba(8, 10, 14, 0.82);
+		}
+
+		.hero-carousel-button[data-hero-carousel-prev] {
+			left: 8px;
+		}
+
+		.hero-carousel-button[data-hero-carousel-next] {
+			right: 8px;
+		}
+
+		.hero-carousel-dots {
+			bottom: 10px;
+			gap: 7px;
+			padding: 7px 9px;
+		}
+
+		.hero-carousel-dot {
+			width: 7px;
+			height: 7px;
+		}
+
+		.hero-carousel-dot.is-active {
+			width: 22px;
+		}
+	}
+</style>
+
+<script is:inline>
+	(() => {
+		const root = document.querySelector('[data-hero-carousel]');
+		const image = document.querySelector('[data-hero-carousel-image]');
+		const frame = document.querySelector('.hero-carousel-frame');
+		const description = document.querySelector('[data-hero-carousel-description]');
+		const prev = document.querySelector('[data-hero-carousel-prev]');
+		const next = document.querySelector('[data-hero-carousel-next]');
+		const dots = Array.from(document.querySelectorAll('[data-hero-carousel-dot]'));
+		if (
+			!(root instanceof HTMLElement) ||
+			!(image instanceof HTMLImageElement) ||
+			!(frame instanceof HTMLElement) ||
+			!(description instanceof HTMLElement)
+		) return;
+
+		const cards = JSON.parse(root.dataset.cards || '[]');
+		if (!Array.isArray(cards) || cards.length === 0) return;
+
+		let currentIndex = 0;
+		let autoAdvanceTimer;
+
+		const syncDots = (index) => {
+			dots.forEach((dot, dotIndex) => {
+				dot.classList.toggle('is-active', dotIndex === index);
+				dot.setAttribute('aria-current', dotIndex === index ? 'true' : 'false');
+			});
+		};
+
+		const syncCaptionOffset = () => {
+			const frameRect = frame.getBoundingClientRect();
+			const imageRect = image.getBoundingClientRect();
+			const offset = Math.max(0, imageRect.left - frameRect.left);
+			const width = Math.max(0, imageRect.width);
+			root.style.setProperty('--hero-caption-offset', `${offset}px`);
+			root.style.setProperty('--hero-caption-width', `${width}px`);
+		};
+
+		const render = (index) => {
+			const card = cards[index];
+			if (!card) return;
+			image.classList.add('is-transitioning');
+			window.setTimeout(() => {
+				image.src = card.image;
+				image.alt = card.alt;
+				description.textContent = card.text;
+				if (image.complete) syncCaptionOffset();
+				requestAnimationFrame(() => {
+					image.classList.remove('is-transitioning');
+				});
+			}, 120);
+		};
+
+		const goTo = (index) => {
+			currentIndex = (index + cards.length) % cards.length;
+			render(currentIndex);
+			syncDots(currentIndex);
+		};
+
+		const startAutoAdvance = () => {
+			window.clearInterval(autoAdvanceTimer);
+			autoAdvanceTimer = window.setInterval(() => {
+				goTo(currentIndex + 1);
+			}, 4200);
+		};
+
+		prev?.addEventListener('click', () => {
+			goTo(currentIndex - 1);
+			startAutoAdvance();
+		});
+		next?.addEventListener('click', () => {
+			goTo(currentIndex + 1);
+			startAutoAdvance();
+		});
+		dots.forEach((dot, index) => {
+			dot.addEventListener('click', () => {
+				goTo(index);
+				startAutoAdvance();
+			});
+		});
+
+		document.addEventListener('visibilitychange', () => {
+			if (document.hidden) {
+				window.clearInterval(autoAdvanceTimer);
+			} else {
+				startAutoAdvance();
+			}
+		});
+
+		image.addEventListener('load', syncCaptionOffset);
+		window.addEventListener('resize', syncCaptionOffset);
+
+		render(0);
+		syncDots(0);
+		startAutoAdvance();
+	})();
+</script>

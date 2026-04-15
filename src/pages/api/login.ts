@@ -2,6 +2,7 @@ import type { APIRoute } from 'astro'
 import { login as svLogin } from '../../lib/svue'
 import cookie from 'cookie'
 import { writeDashboardCache } from '$lib/server/dashboardCache'
+import { getDemoDashboardSnapshot, isDemoLogin } from '$lib/server/demoStudent'
 
 export const POST: APIRoute = async ({ request }) => {
   let body: any
@@ -17,6 +18,30 @@ export const POST: APIRoute = async ({ request }) => {
   }
 
   try {
+    if (isDemoLogin(districtUrl, username, password)) {
+      const cookieValue =
+        Buffer.from(username).toString('base64') +
+        ':' +
+        Buffer.from(password).toString('base64') +
+        ':' +
+        Buffer.from(districtUrl).toString('base64')
+
+      const demoSnapshot = getDemoDashboardSnapshot()
+      writeDashboardCache(cookieValue, demoSnapshot)
+
+      return new Response(JSON.stringify(demoSnapshot), {
+        headers: {
+          'Content-Type': 'application/json',
+          'Set-Cookie': cookie.serialize('auth', cookieValue, {
+            httpOnly: true,
+            maxAge: 60 * 60 * 24 * 30,
+            sameSite: 'strict',
+            path: '/'
+          })
+        }
+      })
+    }
+
     const client = await svLogin(districtUrl, username, password)
 
     const [studentInfo, gradebook0] = await Promise.all([

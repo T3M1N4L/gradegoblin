@@ -12,6 +12,24 @@
   Built with Astro, Svelte, and Tailwind CSS.
 </p>
 
+## Previews
+
+### Home
+
+![Home dashboard preview](./public/home-preview.png)
+
+### Grades
+
+![Grades page preview](./public/grades-preview.png)
+
+### Attendance
+
+![Attendance page preview](./public/attendance-preview.png)
+
+### Hypothetical Mode (Grade Calcluation/Planning)
+
+![Hypothetical grade planning preview](./public/hypothetical-preview.png)
+
 ## Overview
 
 GradeGoblin is a student-focused dashboard that makes school data easier to scan and actually useful. It pulls from StudentVUE and reshapes that information into a faster and nicer interface for checking grades, reviewing assignments, tracking attendance, downloading documents, viewing test history, and experimenting with what-if grade changes. I built this project because I wanted a final grade calculator for finals, but for some classes it was more complex and it meddled with weights and such, so I integrated it directly!
@@ -88,7 +106,7 @@ src/
     server/      Dashboard loading and StudentVUE helpers
   pages/         Routes and API handlers
   styles/        Global styles
-public/          App icons and logo
+public/          App icons, logo, and README preview images
 static/          Fonts, themes, and static assets
 ```
 

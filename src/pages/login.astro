@@ -2,6 +2,7 @@
 import { ViewTransitions } from 'astro:transitions'
 import '../styles/globals.css'
 import AuthShell from '../lib/components/login/AuthShell.astro'
+import X from 'lucide-svelte/icons/x'
 
 if (Astro.locals.user) {
 	return Astro.redirect('/')
@@ -166,8 +167,8 @@ if (Astro.locals.user) {
 							<p class="m-0 text-lg font-semibold text-foreground">Choose district</p>
 							<p class="mt-1 text-sm leading-6 text-muted-foreground">Search by ZIP or paste a custom district URL.</p>
 						</div>
-						<button id="close-district-modal" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg text-foreground transition-colors hover:bg-white/[0.08]">
-							&times;
+						<button id="close-district-modal" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-foreground transition-colors hover:bg-white/[0.08]">
+							<X class="h-4 w-4" />
 						</button>
 					</div>
 

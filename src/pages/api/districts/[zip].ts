@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro'
 import { districtLookup } from '$lib/svue'
+import { getDemoDistrict } from '$lib/server/demoStudent'
 
 export const GET: APIRoute = async ({ params }) => {
 	const zip = String(params.zip ?? '').trim()
@@ -8,6 +9,24 @@ export const GET: APIRoute = async ({ params }) => {
 			status: 400,
 			headers: { 'Content-Type': 'application/json' }
 		})
+	}
+
+	const demoDistrict = getDemoDistrict(zip)
+	if (demoDistrict) {
+		return new Response(
+			JSON.stringify({
+				zip,
+				count: 1,
+				districts: [demoDistrict],
+				source: 'demo'
+			}),
+			{
+				headers: {
+					'Content-Type': 'application/json',
+					'Cache-Control': 'public, max-age=300, stale-while-revalidate=1800'
+				}
+			}
+		)
 	}
 
 	try {

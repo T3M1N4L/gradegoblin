@@ -164,10 +164,6 @@ const periodRows = [...numbers]
 		unexcused: totals.unexcused.find((entry) => entry.number === number)?.total ?? 0,
 		unexcusedTardies: totals.unexcusedTardies.find((entry) => entry.number === number)?.total ?? 0
 	}))
-	.filter(
-		(row) =>
-			row.activities + row.excused + row.tardies + row.unexcused + row.unexcusedTardies > 0
-	)
 ---
 <DashboardLayout title="Attendance" currentPath="/attendance" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod}>
 	<div class="space-y-5">
