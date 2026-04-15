@@ -1,0 +1,137 @@
+---
+import LogOut from 'lucide-svelte/icons/log-out'
+import Settings from 'lucide-svelte/icons/settings'
+
+const {
+	studentName = 'Student',
+	studentSchool = '',
+	studentInitials = 'S',
+	studentPhoto = '',
+	studentId = 'Unknown',
+	mobile = false
+} = Astro.props
+---
+
+{mobile ? (
+	<details class="mobile-profile-menu relative mt-4">
+		<summary class="list-none cursor-pointer">
+			<div class="relative h-16 rounded-2xl px-3 py-3 text-left text-sm text-muted-foreground transition-[color,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.05] hover:text-white">
+				{studentPhoto ? (
+					<div class="absolute left-[8px] top-1/2 size-10 -translate-y-1/2 overflow-hidden rounded-2xl">
+						<img
+							src={`data:image/png;base64,${studentPhoto}`}
+							alt={`${studentName} profile`}
+							class="block size-full object-cover"
+						/>
+					</div>
+				) : (
+					<span class="profile-avatar absolute left-[8px] top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/[0.08] text-sm font-semibold text-white">
+						{studentInitials}
+					</span>
+				)}
+				<div class="absolute left-[3.8rem] right-[0.35rem] top-1/2 min-w-0 -translate-y-1/2">
+					<p class="truncate font-medium text-white">{studentName}</p>
+					<p class="truncate text-xs text-muted-foreground">{studentSchool || 'Student account'}</p>
+				</div>
+			</div>
+		</summary>
+
+		<div class="mobile-profile-popover pointer-events-none absolute bottom-full left-0 mb-2 w-full min-w-[11rem] origin-bottom translate-y-2 scale-[0.98] rounded-[1.1rem] border border-border/60 bg-popover p-2 opacity-0 shadow-2xl shadow-black/45 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)]">
+			<div class="rounded-[0.9rem] border border-border/70 bg-background/70 px-3 py-2.5">
+				<p class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Student ID</p>
+				<p class="mt-1 text-sm font-medium text-foreground">{studentId}</p>
+			</div>
+
+			<div class="mt-2 flex flex-col gap-1">
+				<a
+					href="/settings"
+					class="flex items-center gap-2.5 rounded-[0.85rem] px-2.5 py-2 text-[0.825rem] text-foreground/90 transition-colors hover:bg-accent hover:text-accent-foreground"
+				>
+					<Settings data-icon="inline-start" class="size-[0.9rem] shrink-0" />
+					<span>Settings</span>
+				</a>
+				<button
+					type="button"
+					data-logout-button
+					class="flex w-full items-center gap-2.5 rounded-[0.85rem] px-2.5 py-2 text-left text-[0.825rem] text-destructive transition-colors hover:bg-destructive/12 hover:text-destructive"
+				>
+					<LogOut data-icon="inline-start" class="size-[0.9rem] shrink-0" />
+					<span>Log out</span>
+				</button>
+			</div>
+		</div>
+	</details>
+) : (
+	<div class="group/profile relative mt-6">
+		<div class="relative h-16 rounded-2xl px-3 py-3 text-left text-sm text-muted-foreground transition-[color,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] hover:bg-white/[0.05] hover:text-white">
+			{studentPhoto ? (
+				<div class="absolute left-[8px] top-1/2 size-10 -translate-y-1/2 overflow-hidden rounded-2xl">
+					<img
+						src={`data:image/png;base64,${studentPhoto}`}
+						alt={`${studentName} profile`}
+						class="block size-full object-cover"
+					/>
+				</div>
+			) : (
+				<span class="profile-avatar absolute left-[8px] top-1/2 flex size-10 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/[0.08] text-sm font-semibold text-white">
+					{studentInitials}
+				</span>
+			)}
+			<div class="pointer-events-none absolute left-[3.8rem] right-[0.35rem] top-1/2 min-w-0 -translate-y-1/2 overflow-hidden transition-[max-width,opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] max-w-0 opacity-0 group-hover:max-w-[9.25rem] group-hover:opacity-100">
+				<p class="truncate font-medium text-white">{studentName}</p>
+				<p class="truncate text-xs text-muted-foreground">{studentSchool || 'Student account'}</p>
+			</div>
+		</div>
+
+		<div class="absolute bottom-full left-0 h-5 w-[12.5rem]"></div>
+
+		<div class="pointer-events-none absolute bottom-full left-0 mb-2 w-max min-w-[11rem] max-w-[12.5rem] translate-y-0 rounded-[1.1rem] border border-border/60 bg-popover p-2 opacity-0 shadow-2xl shadow-black/45 transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover/profile:translate-y-0 group-hover/profile:pointer-events-auto group-hover/profile:opacity-100">
+			<div class="rounded-[0.9rem] border border-border/70 bg-background/70 px-3 py-2.5">
+				<p class="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Student ID</p>
+				<p class="mt-1 text-sm font-medium text-foreground">{studentId}</p>
+			</div>
+
+			<div class="mt-2 flex flex-col gap-1">
+				<a
+					href="/settings"
+					class="flex items-center gap-2.5 rounded-[0.85rem] px-2.5 py-2 text-[0.825rem] text-foreground/90 transition-colors hover:bg-accent hover:text-accent-foreground"
+				>
+					<Settings data-icon="inline-start" class="size-[0.9rem] shrink-0" />
+					<span>Settings</span>
+				</a>
+				<button
+					type="button"
+					data-logout-button
+					class="flex w-full items-center gap-2.5 rounded-[0.85rem] px-2.5 py-2 text-left text-[0.825rem] text-destructive transition-colors hover:bg-destructive/12 hover:text-destructive"
+				>
+					<LogOut data-icon="inline-start" class="size-[0.9rem] shrink-0" />
+					<span>Log out</span>
+				</button>
+			</div>
+		</div>
+	</div>
+)}
+
+<script is:inline>
+	document.addEventListener('click', async (event) => {
+		const button = event.target.closest('[data-logout-button]');
+		if (!(button instanceof HTMLButtonElement)) return;
+
+		try {
+			button.disabled = true;
+			await fetch('/api/logout', { method: 'POST' });
+		} catch (error) {
+			console.error('[logout]', error);
+		} finally {
+			window.location.assign('/login');
+		}
+	});
+</script>
+
+<style>
+	.mobile-profile-menu[open] .mobile-profile-popover {
+		pointer-events: auto;
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+</style>

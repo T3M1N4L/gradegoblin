@@ -1,0 +1,260 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+import { getAuthedClient } from '$lib/server/studentvue'
+
+const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+
+const firstValue = (...values) => values.find((value) => String(value ?? '').trim().length > 0) ?? ''
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const client = await getAuthedClient(Astro.locals)
+const school = await client.getSchoolInfo()
+const listing = school?.StudentSchoolInfoListing ?? school
+const staff = toArray(listing?.StaffLists?.StaffList)
+
+const schoolName = firstValue(listing?._School, listing?.School, 'School information')
+const principal = firstValue(listing?._Principal, listing?.Principal)
+const principalEmail = firstValue(listing?._PrincipalEmail, listing?.PrincipalEmail)
+const phone = firstValue(listing?._Phone, listing?.Phone)
+const fax = firstValue(listing?._Phone2, listing?.Phone2)
+const website = firstValue(listing?._URL, listing?.URL)
+const formatStaffPhone = (member) => {
+	const staffPhone = firstValue(member?._Phone, member?.Phone)
+	const extension = firstValue(member?._Extn, member?.Extn)
+	if (staffPhone && extension) return `${staffPhone} ext. ${extension}`
+	return staffPhone || extension || ''
+}
+const addressParts = [
+	firstValue(listing?._SchoolAddress, listing?.SchoolAddress),
+	firstValue(listing?._SchoolAddress2, listing?.SchoolAddress2),
+	[
+		firstValue(listing?._SchoolCity, listing?.SchoolCity),
+		firstValue(listing?._SchoolState, listing?.SchoolState),
+		firstValue(listing?._SchoolZip, listing?.SchoolZip)
+	]
+		.filter(Boolean)
+		.join(', ')
+]
+	.filter(Boolean)
+
+const fullAddress = addressParts.join('\n')
+---
+<DashboardLayout title="School" currentPath="/school" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod}>
+	<section class="w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.18)]">
+		<div class="flex flex-col gap-6">
+			<div class="space-y-2">
+				<h2 class="text-2xl font-semibold tracking-tight">{schoolName}</h2>
+				<div class="flex flex-wrap gap-2 text-xs">
+					{principal && (
+						<span class="inline-flex items-center rounded-full border border-border/70 bg-background/60 px-3 py-1.5 text-muted-foreground">
+							Principal: <span class="ml-1 text-foreground">{principal}</span>
+						</span>
+					)}
+					{phone && (
+						<span class="inline-flex items-center rounded-full border border-border/70 bg-background/60 px-3 py-1.5 font-mono text-muted-foreground">
+							Phone: <span class="ml-1 font-mono text-foreground">{phone}</span>
+						</span>
+					)}
+					{fax && (
+						<span class="inline-flex items-center rounded-full border border-border/70 bg-background/60 px-3 py-1.5 font-mono text-muted-foreground">
+							Fax: <span class="ml-1 font-mono text-foreground">{fax}</span>
+						</span>
+					)}
+				</div>
+			</div>
+
+			<div class="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+				<div class="min-w-0 rounded-[1.4rem] border border-border/70 bg-background/40 p-5">
+					<p class="text-sm font-medium text-muted-foreground">Address</p>
+					{fullAddress ? (
+						<p class="mt-3 whitespace-pre-line text-sm leading-6 text-foreground">{fullAddress}</p>
+					) : (
+						<p class="mt-3 text-sm text-muted-foreground">No address information was returned.</p>
+					)}
+				</div>
+				<div class="min-w-0 rounded-[1.4rem] border border-border/70 bg-background/40 p-5">
+					<p class="text-sm font-medium text-muted-foreground">Contact</p>
+					<div class="mt-3 space-y-3 text-sm">
+						<div>
+							<p class="text-xs uppercase tracking-[0.16em] text-muted-foreground">Principal Email</p>
+							{principalEmail ? (
+								<a href={`mailto:${principalEmail}`} class="mt-1 inline-block text-foreground underline-offset-4 hover:underline">
+									{principalEmail}
+								</a>
+							) : (
+								<p class="mt-1 text-muted-foreground">Unavailable</p>
+							)}
+						</div>
+						<div>
+							<p class="text-xs uppercase tracking-[0.16em] text-muted-foreground">Website</p>
+							{website ? (
+								<a href={website} target="_blank" rel="noreferrer" class="mt-1 inline-block break-all text-foreground underline-offset-4 hover:underline">
+									{website}
+								</a>
+							) : (
+								<p class="mt-1 text-muted-foreground">Unavailable</p>
+							)}
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</section>
+
+	<section class="mt-6 w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.18)]">
+		<div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+			<h2 class="text-xl font-semibold">Staff directory</h2>
+			<input id="staff-search" type="text" placeholder="Search staff" class="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm sm:w-auto" />
+		</div>
+		<div class="w-full min-w-0 overflow-x-auto">
+			<table id="staff-table" class="w-full table-fixed text-left text-sm">
+				<thead class="text-muted-foreground">
+					<tr>
+						<th class="w-[24%] pb-3 pr-3 font-medium">Name</th>
+						<th class="w-[24%] pb-3 pr-3 font-medium">Title</th>
+						<th class="w-[32%] pb-3 pr-3 font-medium">Email</th>
+						<th class="w-[20%] pb-3 font-medium">Phone</th>
+					</tr>
+				</thead>
+				<tbody>
+					{staff.map((member) => (
+						<tr
+							class="cursor-pointer border-t border-border/60 staff-row transition-colors hover:bg-background/30"
+							data-staff-row
+							data-name={member.Name || 'N/A'}
+							data-title={member.Title || 'N/A'}
+							data-email={member.EMail || 'N/A'}
+							data-phone={formatStaffPhone(member) || 'N/A'}
+							tabindex="0"
+						>
+							<td class="py-4 pr-3 align-top font-medium staff-name">
+								<div class="line-clamp-2 break-words">{member.Name}</div>
+							</td>
+							<td class="py-4 pr-3 align-top text-muted-foreground staff-title">
+								<div class="line-clamp-2 break-words">{member.Title}</div>
+							</td>
+							<td class="py-4 pr-3 align-top text-muted-foreground staff-email">
+								<div class="line-clamp-3 break-words">{member.EMail || 'Unavailable'}</div>
+							</td>
+							<td class="py-4 align-top font-mono text-muted-foreground staff-phone">
+								<div class="line-clamp-2 break-words">{formatStaffPhone(member) || 'N/A'}</div>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	</section>
+	<div id="staff-modal-shell" class="pointer-events-none fixed inset-0 z-[70] opacity-0 transition-opacity duration-200" aria-hidden="true" inert>
+		<div data-staff-modal-backdrop class="absolute inset-0 bg-black/60 backdrop-blur-[2px]"></div>
+		<div class="absolute inset-x-4 top-1/2 mx-auto w-full max-w-lg -translate-y-1/2">
+			<div id="staff-modal-card" class="translate-y-3 scale-[0.98] rounded-[2rem] border border-border/70 bg-card p-6 opacity-0 shadow-2xl shadow-black/45 transition-[opacity,transform] duration-200">
+				<div class="flex items-start justify-between gap-4">
+					<div class="min-w-0">
+						<p id="staff-modal-name" class="truncate text-2xl font-semibold tracking-tight">Staff member</p>
+						<p id="staff-modal-title" class="mt-1 text-sm text-muted-foreground">N/A</p>
+					</div>
+					<button type="button" data-staff-modal-close class="inline-flex size-10 items-center justify-center rounded-2xl text-muted-foreground transition-colors hover:bg-white/[0.05] hover:text-white" aria-label="Close staff details">
+						×
+					</button>
+				</div>
+				<div class="mt-5 grid gap-3">
+					<div class="rounded-[1.2rem] border border-border/70 bg-background/55 px-4 py-3">
+						<p class="text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">Email</p>
+						<p id="staff-modal-email" class="mt-1 break-words text-sm text-foreground">N/A</p>
+					</div>
+					<div class="rounded-[1.2rem] border border-border/70 bg-background/55 px-4 py-3">
+						<p class="text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">Phone</p>
+						<p id="staff-modal-phone" class="mt-1 break-words font-mono text-sm text-foreground">N/A</p>
+					</div>
+				</div>
+				<div class="mt-5 flex flex-wrap gap-2">
+					<a id="staff-modal-email-link" href="#" class="inline-flex items-center justify-center rounded-full border border-border/70 px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-background/60">Email</a>
+				</div>
+			</div>
+		</div>
+	</div>
+	<script is:inline>
+		(() => {
+			const searchInput = document.getElementById('staff-search');
+			const rows = Array.from(document.querySelectorAll('.staff-row'));
+			if (!(searchInput instanceof HTMLInputElement)) return;
+
+			searchInput.oninput = () => {
+				const query = searchInput.value.toLowerCase().trim();
+				rows.forEach((row) => {
+					const text = row.textContent.toLowerCase();
+					row.style.display = !query || text.includes(query) ? '' : 'none';
+				});
+			};
+		})();
+
+		(() => {
+			const shell = document.getElementById('staff-modal-shell');
+			const card = document.getElementById('staff-modal-card');
+			const nameEl = document.getElementById('staff-modal-name');
+			const titleEl = document.getElementById('staff-modal-title');
+			const emailEl = document.getElementById('staff-modal-email');
+			const phoneEl = document.getElementById('staff-modal-phone');
+			const emailLink = document.getElementById('staff-modal-email-link');
+			let lastTrigger = null;
+
+			const setOpen = (open) => {
+				if (!(shell instanceof HTMLElement) || !(card instanceof HTMLElement)) return;
+				shell.classList.toggle('pointer-events-none', !open);
+				shell.classList.toggle('opacity-0', !open);
+				shell.setAttribute('aria-hidden', open ? 'false' : 'true');
+				shell.inert = !open;
+				card.classList.toggle('opacity-0', !open);
+				card.classList.toggle('translate-y-3', !open);
+				card.classList.toggle('scale-[0.98]', !open);
+
+				if (open) {
+					const closeButton = shell.querySelector('[data-staff-modal-close]');
+					if (closeButton instanceof HTMLElement) closeButton.focus();
+				} else if (lastTrigger instanceof HTMLElement) {
+					lastTrigger.focus();
+				}
+			};
+
+			document.addEventListener('click', (event) => {
+				const row = event.target.closest('[data-staff-row]');
+				if (row instanceof HTMLElement) {
+					lastTrigger = row;
+					const name = row.dataset.name || 'N/A';
+					const title = row.dataset.title || 'N/A';
+					const email = row.dataset.email || 'N/A';
+					const phone = row.dataset.phone || 'N/A';
+
+					if (nameEl) nameEl.textContent = name;
+					if (titleEl) titleEl.textContent = title;
+					if (emailEl) emailEl.textContent = email;
+					if (phoneEl) phoneEl.textContent = phone;
+					if (emailLink instanceof HTMLAnchorElement) {
+						const hasEmail = email !== 'N/A';
+						emailLink.href = hasEmail ? `mailto:${email}` : '#';
+						emailLink.classList.toggle('pointer-events-none', !hasEmail);
+						emailLink.classList.toggle('opacity-50', !hasEmail);
+					}
+
+					setOpen(true);
+					return;
+				}
+
+				const closeButton = event.target.closest('[data-staff-modal-close], [data-staff-modal-backdrop]');
+				if (closeButton) setOpen(false);
+			});
+
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape') setOpen(false);
+				if ((event.key === 'Enter' || event.key === ' ') && event.target instanceof HTMLElement && event.target.matches('[data-staff-row]')) {
+					event.preventDefault();
+					event.target.click();
+				}
+			});
+		})();
+	</script>
+</DashboardLayout>

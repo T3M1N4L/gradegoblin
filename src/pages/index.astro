@@ -1,0 +1,147 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+
+const resolveCoursePeriod = (course, fallbackIndex) => {
+	const raw = course?.Period ?? course?._Period
+	const parsed = Number(raw)
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackIndex + 1
+}
+
+const toNumber = (value) => {
+	const parsed = Number(String(value ?? '').replace('%', ''))
+	return Number.isFinite(parsed) ? parsed : null
+}
+
+const getGradeAccent = (value) => {
+	const score = toNumber(value)
+	if (score == null) return 'rgb(244, 244, 245)'
+	if (score >= 90) return 'rgb(74, 222, 128)'
+	if (score >= 80) return 'rgb(190, 242, 100)'
+	if (score >= 70) return 'rgb(251, 191, 36)'
+	if (score >= 60) return 'rgb(251, 146, 60)'
+	return 'rgb(248, 113, 113)'
+}
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const courses = data.gradebook?.Courses?.Course ?? []
+const recentAssignments = (data.gradebook?.assignments ?? []).filter((a) => a.scorePercent >= 0).slice(0, 8)
+const missingAssignments = courses.reduce((sum, course) => sum + Number(course.missingCount ?? 0), 0)
+const stats = [
+	{ label: 'Current average', value: data.gradebook?.average ?? '-', style: `color: ${getGradeAccent(data.gradebook?.average)};` },
+	{ label: 'This week', value: data.gradebook?.week?.average ?? '-', style: `color: ${getGradeAccent(data.gradebook?.week?.average)};` },
+	{ label: 'Assignments this week', value: String(data.gradebook?.week?.length ?? 0), style: '' },
+	{ label: 'Days left', value: String(Math.max(data.gradebook?.days ?? 0, 0)), style: '' }
+]
+---
+<DashboardLayout title={`Home`} currentPath="/" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod} showPeriodSelector={true}>
+	<div class="grid grid-cols-4 gap-2 sm:gap-4">
+		{stats.map((stat) => (
+			<section class="min-w-0 rounded-[1.25rem] border border-border/70 bg-card/60 p-3 sm:rounded-[1.75rem] sm:p-5">
+				<p class="text-[0.7rem] leading-tight text-muted-foreground sm:text-sm">{stat.label}</p>
+				<p class="mt-2 truncate font-mono text-lg font-semibold tracking-tight sm:mt-3 sm:text-3xl" style={stat.style}>{stat.value}</p>
+			</section>
+		))}
+	</div>
+
+	<div class="mt-6 grid gap-4 xl:grid-cols-[1.35fr,1fr]">
+		<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="gradebook-panel">
+			<div class="flex items-center justify-between gap-3 p-6">
+				<h2 class="text-xl font-semibold">Grades</h2>
+				<p class="font-mono text-sm text-muted-foreground">{missingAssignments} missing</p>
+			</div>
+			<div class="overflow-x-auto px-6 pb-6">
+				<table class="w-full text-left text-sm">
+					<thead class="text-muted-foreground">
+						<tr>
+							<th class="px-4 pb-3 font-medium">Course</th>
+							<th class="px-4 pb-3 font-medium">Teacher</th>
+							<th class="px-4 pb-3 text-right font-medium">Grade</th>
+						</tr>
+					</thead>
+					<tbody>
+						{courses.map((course, i) => {
+							const coursePeriod = resolveCoursePeriod(course, i)
+							return (
+								<tr
+									class="cursor-pointer border-t border-border/60 transition-colors hover:bg-background/40"
+									data-row-link
+									data-href={`/period/${coursePeriod}`}
+									tabindex="0"
+									onclick={`window.location.assign('/period/${coursePeriod}')`}
+								>
+									<td class="px-4 py-4">
+										<div class="px-2 py-1" transition:name={`course-card-${data.selectedPeriod}-${coursePeriod}`}>
+											<div class="font-medium">{course.Title}</div>
+											<div class="mt-1 text-xs text-muted-foreground">
+												{course.CourseID ?? course._CourseID ?? 'Course'} • Period {course.Period ?? course._Period ?? '-'} • Room {course.Room ?? course._Room ?? '-'}
+											</div>
+										</div>
+									</td>
+									<td class="px-4 py-4 text-muted-foreground">
+										<div>{course.Staff ?? course._Staff ?? 'Teacher unavailable'}</div>
+										<div class="mt-1 text-xs">{course.StaffEMail ?? course._StaffEMail ?? ''}</div>
+									</td>
+									<td class="px-4 py-4 text-right">
+										<div
+											class="text-2xl font-semibold"
+											style={`color: ${course.color ?? getGradeAccent(course.scorePercent ?? course.score)};`}
+										>
+											{course.scoreString}
+										</div>
+										<div class="font-mono text-sm text-muted-foreground">{course.score}</div>
+									</td>
+								</tr>
+							)
+						})}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="rounded-[2rem] border border-border/70 bg-card/60" transition:name="recent-assignments-panel">
+			<div class="flex items-center justify-between gap-3 p-6">
+				<h2 class="text-xl font-semibold">Recent assignments</h2>
+				<a
+					href="/assignments"
+					class="inline-flex items-center justify-center rounded-full border border-border/70 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/20 hover:bg-background/50 hover:text-foreground"
+				>
+					View all
+				</a>
+			</div>
+			<div class="overflow-x-auto px-6 pb-6">
+				<table class="w-full text-left text-sm">
+					<thead class="text-muted-foreground">
+						<tr>
+							<th class="px-4 pb-3 font-medium">Assignment</th>
+							<th class="px-4 pb-3 font-medium">Course</th>
+							<th class="px-4 pb-3 text-right font-medium">Result</th>
+						</tr>
+					</thead>
+					<tbody>
+						{recentAssignments.map((assignment) => (
+							<tr class="border-t border-border/60">
+								<td class="px-4 py-4">
+									<div class="font-medium">{assignment.Measure}</div>
+									<div class="font-mono text-xs text-muted-foreground">{assignment.DueDate}</div>
+								</td>
+								<td class="px-4 py-4 text-muted-foreground">{assignment.course}</td>
+								<td class="px-4 py-4 text-right">
+									<div
+										class="font-mono font-semibold"
+										style={`color: ${assignment.style?.replace?.('color: ', '').replace?.(';', '') ?? getGradeAccent(assignment.scorePercent ?? assignment.percent)};`}
+									>
+										{assignment.percent}
+									</div>
+									<div class="font-mono text-xs text-muted-foreground">{assignment.score}</div>
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</div>
+</DashboardLayout>

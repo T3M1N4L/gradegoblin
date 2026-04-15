@@ -1,0 +1,128 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+import { getAuthedClient } from '$lib/server/studentvue'
+
+const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+
+const prettify = (label) => {
+	if (!label) return ''
+	if (label.includes(' ')) return label
+	let spaced = label.replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+	spaced = spaced.replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+	return spaced.trim()
+}
+
+const mergeSparseRows = (rows, columns) => {
+	const merged = []
+	for (const row of rows) {
+		const existingIndex = merged.findIndex((existing) => {
+			for (const column of columns) {
+				const existingValue = existing[column]
+				const rowValue = row[column]
+				if (existingValue && rowValue && existingValue !== rowValue) return false
+			}
+			return true
+		})
+
+		if (existingIndex === -1) {
+			merged.push({ ...row })
+			continue
+		}
+
+		for (const column of columns) {
+			if ((!merged[existingIndex][column] || merged[existingIndex][column] === '') && row[column]) {
+				merged[existingIndex][column] = row[column]
+			}
+		}
+	}
+
+	return merged
+}
+
+const formatDate = (value) => {
+	if (!value) return ''
+	const date = new Date(String(value).replace(/ 00:00:00 AM$/i, ''))
+	if (Number.isNaN(date.getTime())) return String(value)
+	return date.toLocaleDateString(undefined, {
+		year: 'numeric',
+		month: 'short',
+		day: 'numeric'
+	})
+}
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const client = await getAuthedClient(Astro.locals)
+
+let payload = null
+for (let attempt = 0; attempt < 3; attempt += 1) {
+	payload = await client.getTests()
+	const tests = toArray(payload?.analysis?.availableTests ?? payload?.availableTests)
+	if (tests.length) break
+}
+
+const tests = toArray(payload?.analysis?.availableTests ?? payload?.availableTests).map((test) => {
+	const columns = toArray(test?.GridColumns)
+	const gridRows = mergeSparseRows(toArray(test?.GridData), columns)
+
+	return {
+		gu: test?.GU ?? test?._GU ?? '',
+		name: test?.Name ?? test?._Name ?? 'Untitled Test',
+		columns,
+		rows: gridRows
+	}
+})
+---
+<DashboardLayout title="Test history" currentPath="/tests" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod}>
+	{tests.length === 0 ? (
+		<section class="w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.18)]">
+			<div class="flex min-h-[14rem] flex-col items-center justify-center gap-3 text-center">
+				<div class="inline-flex h-12 w-12 items-center justify-center rounded-full border border-border/80 bg-background/70 text-muted-foreground">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+						<circle cx="12" cy="12" r="10"></circle>
+						<path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 3-3 3"></path>
+						<path d="M12 17h.01"></path>
+					</svg>
+				</div>
+				<div>
+					<h2 class="text-lg font-semibold">No tests found</h2>
+					<p class="mt-1 text-sm text-muted-foreground">No test history was returned for this account.</p>
+				</div>
+			</div>
+		</section>
+	) : (
+		<div class="space-y-6">
+			{tests.map((test) => (
+				<section class="w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.18)]">
+					<h2 class="text-xl font-semibold">{test.name}</h2>
+					<div class="mt-4 w-full min-w-0 overflow-x-auto">
+						<table class="w-full table-fixed text-left text-sm">
+							<thead class="text-muted-foreground">
+								<tr>
+									{test.columns.map((column) => <th class="pb-3 pr-3 font-medium">{prettify(column)}</th>)}
+								</tr>
+							</thead>
+							<tbody>
+								{test.rows.map((row) => (
+									<tr class="border-t border-border/60">
+										{test.columns.map((column) => {
+											const value = column === 'AdminDate' ? formatDate(row[column]) : row[column] ?? ''
+											const mono = /score|percent|date|grade|scale/i.test(column)
+											return (
+												<td class:list={['py-4 pr-3 align-top break-words', mono && 'font-mono']}>
+													<div class="line-clamp-3 break-words">{value}</div>
+												</td>
+											)
+										})}
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</section>
+			))}
+		</div>
+	)}
+</DashboardLayout>

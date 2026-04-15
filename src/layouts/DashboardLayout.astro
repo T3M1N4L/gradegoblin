@@ -1,0 +1,150 @@
+---
+import { ViewTransitions } from 'astro:transitions'
+import '../styles/globals.css'
+import LayoutPeriodSelect from '$lib/components/LayoutPeriodSelect.svelte'
+import Sidebar from '$lib/components/Sidebar.astro'
+
+const {
+	title = 'GradeGoblin',
+	currentPath = '/',
+	student,
+	periodDates = [],
+	selectedPeriod = 0,
+	showPageHeader = true
+} = Astro.props
+---
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="theme-color" content="#13161b" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="GradeGoblin" />
+		<link rel="manifest" href="/manifest.json" />
+		<link rel="icon" href="/favicon-64.png?v=2" type="image/png" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+		<link rel="stylesheet" href="/font/font.css" />
+		<ViewTransitions />
+		<script is:inline>
+			if ('serviceWorker' in navigator) {
+				const isLocalhost =
+					window.location.hostname === 'localhost' ||
+					window.location.hostname === '127.0.0.1';
+
+				window.addEventListener('load', () => {
+					if (isLocalhost) {
+						navigator.serviceWorker.getRegistrations().then((registrations) => {
+							registrations.forEach((registration) => registration.unregister());
+						});
+						if ('caches' in window) {
+							caches.keys().then((keys) => {
+								keys.forEach((key) => caches.delete(key));
+							});
+						}
+						return;
+					}
+
+					navigator.serviceWorker.register('/sw.js').catch(() => {});
+				});
+			}
+		</script>
+		<script is:inline>
+			(() => {
+				try {
+					const raw = localStorage.getItem('gradegoblin-settings');
+					const theme = raw ? JSON.parse(raw).theme ?? 'amoled' : 'amoled';
+					document.documentElement.setAttribute('data-theme', theme);
+					document.documentElement.classList[theme === 'light' ? 'remove' : 'add']('dark');
+				} catch {
+					document.documentElement.setAttribute('data-theme', 'amoled');
+					document.documentElement.classList.add('dark');
+				}
+			})();
+		</script>
+	</head>
+	<body class="min-h-screen bg-background text-foreground">
+		<div
+			id="page-loading"
+			class="pointer-events-none fixed inset-0 z-50 flex items-center justify-center bg-background/76 opacity-0 transition-opacity duration-200 [visibility:hidden] backdrop-blur-[2px]"
+		>
+			<div class="flex flex-col items-center gap-4 rounded-[1.75rem] border border-white/10 bg-black/85 px-8 py-7 shadow-2xl shadow-black/50">
+				<div class="size-12 animate-spin rounded-full border-[3px] border-white/12 border-t-white/90"></div>
+				<p class="text-sm text-muted-foreground">Loading...</p>
+			</div>
+		</div>
+		<style>
+			[data-astro-transition='forward'] #page-loading,
+			[data-astro-transition='back'] #page-loading {
+				display: none;
+			}
+		</style>
+		<div class="grid min-h-screen md:grid-cols-[6.25rem_1fr] md:gap-4">
+			<Sidebar currentPath={currentPath} student={student} />
+
+			<main class="min-h-screen min-w-0 overflow-visible p-4 pt-20 md:px-7 md:py-6 md:pt-6">
+				{showPageHeader && (
+					<div class="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+						<div>
+							<h1 class="text-3xl font-semibold tracking-tight">{title}</h1>
+						</div>
+						<LayoutPeriodSelect periodDates={periodDates} selectedPeriod={Number(selectedPeriod)} client:load />
+					</div>
+				)}
+				<slot />
+			</main>
+		</div>
+		<script is:inline>
+			const loadingEl = document.getElementById('page-loading');
+			const showLoading = () => {
+				if (!loadingEl) return;
+				loadingEl.style.visibility = 'visible';
+				loadingEl.classList.remove('opacity-0');
+			};
+			const hideLoading = () => {
+				if (!loadingEl) return;
+				loadingEl.classList.add('opacity-0');
+				loadingEl.style.visibility = 'hidden';
+			};
+
+			const shouldShowLoadingForLink = (link) => {
+				if (!link || link.target === '_blank' || link.hasAttribute('download')) return false;
+
+				const href = link.getAttribute('href');
+				if (!href || href.startsWith('#')) return false;
+
+				try {
+					const target = new URL(link.href, window.location.href);
+					if (target.origin !== window.location.origin) return false;
+					return `${target.pathname}${target.search}` !== `${window.location.pathname}${window.location.search}`;
+				} catch {
+					return false;
+				}
+			};
+
+			window.addEventListener('pageshow', hideLoading);
+			window.addEventListener('gradegoblin:navigation-start', showLoading);
+
+			document.addEventListener('submit', (event) => {
+				const form = event.target;
+				if (form instanceof HTMLFormElement) showLoading();
+			});
+
+			document.addEventListener('click', (event) => {
+				const link = event.target.closest('a[href]');
+				if (shouldShowLoadingForLink(link)) showLoading();
+
+				const row = event.target.closest('[data-row-link]');
+				if (row?.dataset?.href) showLoading();
+			});
+
+			document.addEventListener('keydown', (event) => {
+				if (event.key !== 'Enter' && event.key !== ' ') return;
+				const row = event.target.closest('[data-row-link]');
+				if (row?.dataset?.href) showLoading();
+			});
+		</script>
+	</body>
+</html>

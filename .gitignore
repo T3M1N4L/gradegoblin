@@ -1,0 +1,20 @@
+# dependencies
+node_modules/
+
+# build output
+.astro/
+dist/
+build/
+package/
+.svelte-kit/
+.output/
+
+# local environment
+.env
+.env.*
+!.env.example
+
+# local tooling
+.vercel/
+responses/
+.DS_Store

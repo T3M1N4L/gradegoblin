@@ -1,0 +1,419 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+import { getAuthedClient } from '$lib/server/studentvue'
+
+const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+const toNumber = (value) => {
+	const parsed = Number(value)
+	return Number.isFinite(parsed) ? parsed : 0
+}
+
+const parseDate = (value) => {
+	if (!value) return null
+	const normalized = String(value).trim()
+	if (!normalized) return null
+
+	const slashMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/)
+	if (slashMatch) {
+		const [, month, day, year] = slashMatch
+		const date = new Date(Number(year), Number(month) - 1, Number(day))
+		return Number.isNaN(date.getTime()) ? null : date
+	}
+
+	const date = new Date(normalized)
+	return Number.isNaN(date.getTime()) ? null : date
+}
+
+const isWithinRange = (date, start, end) => {
+	if (!date) return false
+	if (start && date < start) return false
+	if (end && date > end) return false
+	return true
+}
+
+const normalizePeriod = (period) => ({
+	number: toNumber(period?.Number ?? period?._Number),
+	name: period?.Name ?? period?._Name ?? '',
+	course: period?.Course ?? period?._Course ?? '',
+	staff: period?.Staff ?? period?._Staff ?? '',
+	reason: period?.Reason ?? period?._Reason ?? '',
+	iconName: period?.IconName ?? period?._IconName ?? ''
+})
+
+const inferCategory = (period, day) => {
+	const text =
+		`${period?.iconName ?? ''} ${period?.name ?? ''} ${period?.reason ?? ''} ${day?.reason ?? ''} ${day?.icon ?? ''}`.toLowerCase()
+	if (text.includes('activity')) return 'activities'
+	if (text.includes('tardy')) {
+		return text.includes('unx') || text.includes('unexcused') ? 'unexcusedTardies' : 'tardies'
+	}
+	if (text.includes('unexcused') || text.includes('unx')) return 'unexcused'
+	if (
+		text.includes('excused') ||
+		text.includes('illness') ||
+		text.includes('e-learning') ||
+		text.includes('elearning') ||
+		text.includes('sick') ||
+		text.includes('medical')
+	) {
+		return 'excused'
+	}
+	return null
+}
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const client = await getAuthedClient(Astro.locals)
+const attendance = await client.getAttendance()
+
+const selectedPeriodMeta = toArray(data.periodDates)[data.selectedPeriod] ?? null
+const selectedRangeStart = parseDate(selectedPeriodMeta?.StartDate ?? selectedPeriodMeta?._StartDate)
+const selectedRangeEnd = parseDate(selectedPeriodMeta?.EndDate ?? selectedPeriodMeta?._EndDate)
+
+const allAbsences = toArray(attendance?.Absences?.Absence)
+	.map((absence) => ({
+		displayDate: absence?.AbsenceDate ?? absence?._AbsenceDate ?? '',
+		date: parseDate(absence?.AbsenceDate ?? absence?._AbsenceDate ?? ''),
+		reason:
+			absence?.Reason ??
+			absence?._Reason ??
+			absence?.CodeAllDayDescription ??
+			absence?._CodeAllDayDescription ??
+			'',
+		note: absence?.Note ?? absence?._Note ?? '',
+		icon:
+			absence?.DailyIconName ??
+			absence?._DailyIconName ??
+			absence?.CodeAllDayReasonType ??
+			absence?._CodeAllDayReasonType ??
+			'',
+		periods: toArray(absence?.Periods?.Period).map(normalizePeriod).sort((a, b) => a.number - b.number)
+	}))
+	.sort((a, b) => {
+		return (b.date?.getTime() ?? 0) - (a.date?.getTime() ?? 0)
+	})
+
+const absences = allAbsences.filter((absence) =>
+	isWithinRange(absence.date, selectedRangeStart, selectedRangeEnd)
+)
+
+const inferredTotals = {
+	activities: new Map(),
+	excused: new Map(),
+	tardies: new Map(),
+	unexcused: new Map(),
+	unexcusedTardies: new Map()
+}
+
+for (const day of absences) {
+	for (const period of day.periods) {
+		const category = inferCategory(period, day)
+		if (!category || !period.number) continue
+		inferredTotals[category].set(period.number, (inferredTotals[category].get(period.number) ?? 0) + 1)
+	}
+}
+
+const totals = Object.fromEntries(
+	Object.entries(inferredTotals).map(([key, entries]) => [
+		key,
+		[...entries.entries()]
+			.map(([number, total]) => ({ number, total }))
+			.sort((a, b) => a.number - b.number)
+	])
+)
+
+const periodNameMap = {}
+for (const gradebook of toArray(data.periods)) {
+	for (const course of toArray(gradebook?.Courses?.Course)) {
+		const courseNumber = toNumber(course?.Period ?? course?._Period)
+		const courseTitle = course?.Title ?? course?._Title
+		if (courseNumber && courseTitle && !periodNameMap[courseNumber]) {
+			periodNameMap[courseNumber] = courseTitle
+		}
+	}
+}
+
+for (const day of absences) {
+	for (const period of day.periods) {
+		if (period.number && period.course && !periodNameMap[period.number]) {
+			periodNameMap[period.number] = period.course
+		}
+	}
+}
+
+const numbers = new Set()
+for (const key of Object.keys(totals)) {
+	for (const entry of totals[key]) numbers.add(entry.number)
+}
+for (const key of Object.keys(periodNameMap)) numbers.add(toNumber(key))
+for (const day of absences) {
+	for (const period of day.periods) numbers.add(period.number)
+}
+
+const periodRows = [...numbers]
+	.filter(Boolean)
+	.sort((a, b) => a - b)
+	.map((number) => ({
+		number,
+		label: periodNameMap[number] ? `${number} - ${periodNameMap[number]}` : `Period ${number}`,
+		activities: totals.activities.find((entry) => entry.number === number)?.total ?? 0,
+		excused: totals.excused.find((entry) => entry.number === number)?.total ?? 0,
+		tardies: totals.tardies.find((entry) => entry.number === number)?.total ?? 0,
+		unexcused: totals.unexcused.find((entry) => entry.number === number)?.total ?? 0,
+		unexcusedTardies: totals.unexcusedTardies.find((entry) => entry.number === number)?.total ?? 0
+	}))
+	.filter(
+		(row) =>
+			row.activities + row.excused + row.tardies + row.unexcused + row.unexcusedTardies > 0
+	)
+---
+<DashboardLayout title="Attendance" currentPath="/attendance" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod}>
+	<div class="space-y-5">
+		<section class="w-full min-w-0 overflow-hidden rounded-[2rem] border border-border/70 bg-card/60 p-4 shadow-[0_16px_44px_rgba(0,0,0,0.18)] sm:p-6">
+			<h2 class="text-xl font-semibold">Attendance</h2>
+			<div class="mt-4">
+				<div class="rounded-[1.8rem] border border-border/70 bg-card/40 px-3 py-4 sm:px-6 sm:py-6">
+					<div class="h-[12.75rem]">
+						<canvas id="attendance-summary-chart" data-rows={JSON.stringify(periodRows)}></canvas>
+					</div>
+					<div class="mt-5 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm">
+						<div class="flex items-center gap-2">
+							<span class="h-2.5 w-2.5 rounded-[2px] bg-[#34d399]"></span>
+							<span class="font-medium text-foreground">Activities</span>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="h-2.5 w-2.5 rounded-[2px] bg-[#86efac]"></span>
+							<span class="font-medium text-foreground">Excused</span>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="h-2.5 w-2.5 rounded-[2px] bg-[#4ade80]"></span>
+							<span class="font-medium text-foreground">Tardies</span>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="h-2.5 w-2.5 rounded-[2px] bg-[#22c55e]"></span>
+							<span class="font-medium text-foreground">Unexcused</span>
+						</div>
+						<div class="flex items-center gap-2">
+							<span class="h-2.5 w-2.5 rounded-[2px] bg-[#166534]"></span>
+							<span class="font-medium text-foreground">Unexcused Tardies</span>
+						</div>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<section class="w-full min-w-0 overflow-hidden rounded-[2rem] border border-border/70 bg-card/60 p-4 shadow-[0_16px_44px_rgba(0,0,0,0.18)] sm:p-6">
+			<div class="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
+				<div>
+					<h3 class="text-lg font-semibold">Period summary</h3>
+					<p class="mt-1 text-sm text-muted-foreground">Attendance totals grouped by class period.</p>
+				</div>
+				<p class="font-mono text-xs uppercase tracking-[0.18em] text-muted-foreground">{periodRows.length} periods</p>
+			</div>
+			<div class="w-full min-w-0 overflow-x-auto">
+				<table class="w-full table-fixed text-left text-[0.7rem] sm:text-sm">
+					<thead class="text-muted-foreground">
+						<tr>
+							<th class="w-[40%] pb-3 pr-2 font-medium sm:w-auto sm:pr-4">Period</th>
+							<th class="w-[12%] pb-3 pr-1 font-medium text-center sm:w-auto sm:pr-4 sm:text-left">Act</th>
+							<th class="w-[12%] pb-3 pr-1 font-medium text-center sm:w-auto sm:pr-4 sm:text-left">Exc</th>
+							<th class="w-[12%] pb-3 pr-1 font-medium text-center sm:w-auto sm:pr-4 sm:text-left">Tar</th>
+							<th class="w-[12%] pb-3 pr-1 font-medium text-center sm:w-auto sm:pr-4 sm:text-left">Unx</th>
+							<th class="w-[12%] pb-3 font-medium text-center sm:w-auto sm:text-left">Unx T</th>
+						</tr>
+					</thead>
+					<tbody>
+						{periodRows.map((row) => (
+							<tr class="border-t border-border/60">
+								<td class="py-3 pr-2 font-medium sm:py-4 sm:pr-4">
+									<div class="truncate" title={row.label}>{row.label}</div>
+								</td>
+								<td class="py-3 pr-1 text-center font-mono sm:py-4 sm:pr-4 sm:text-left">{row.activities}</td>
+								<td class="py-3 pr-1 text-center font-mono sm:py-4 sm:pr-4 sm:text-left">{row.excused}</td>
+								<td class="py-3 pr-1 text-center font-mono sm:py-4 sm:pr-4 sm:text-left">{row.tardies}</td>
+								<td class="py-3 pr-1 text-center font-mono sm:py-4 sm:pr-4 sm:text-left">{row.unexcused}</td>
+								<td class="py-3 text-center font-mono sm:py-4 sm:text-left">{row.unexcusedTardies}</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		{absences.map((absence, index) => (
+			<details class="attendance-card w-full min-w-0 overflow-hidden rounded-[2rem] border border-border/70 bg-card/60 px-4 py-4 shadow-[0_16px_44px_rgba(0,0,0,0.18)] transition-colors sm:px-5" open={index === 0}>
+				<summary class="list-none cursor-pointer">
+					<div class="flex items-start justify-between gap-3 sm:gap-4">
+						<div class="min-w-0">
+							<div class="flex items-center gap-3">
+								<span class="attendance-toggle inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/80 bg-background/70 text-foreground transition-transform duration-200">
+									<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+										<path d="m6 9 6 6 6-6"></path>
+									</svg>
+								</span>
+								<div>
+									<span class="block font-mono text-2xl font-semibold tracking-tight sm:text-3xl">{absence.displayDate}</span>
+									<p class="mt-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">Attendance event</p>
+								</div>
+							</div>
+							<p class="mt-3 break-words pr-1 text-sm text-muted-foreground">
+								{absence.reason || '(No reason)'}{absence.note ? ` - ${absence.note}` : ' -'}
+							</p>
+						</div>
+					</div>
+				</summary>
+				<div class="mt-6 w-full min-w-0 overflow-x-auto">
+					<table class="w-full table-fixed text-left text-[0.7rem] sm:text-sm">
+						<thead class="text-muted-foreground">
+							<tr>
+								<th class="w-[8%] pb-3 pr-2 font-medium">#</th>
+								<th class="w-[32%] pb-3 pr-2 font-medium">Course</th>
+								<th class="w-[24%] pb-3 pr-2 font-medium">Staff</th>
+								<th class="w-[36%] pb-3 font-medium">Reason</th>
+							</tr>
+						</thead>
+						<tbody>
+							{absence.periods.map((period) => (
+								<tr class="border-t border-border/60">
+									<td class="py-3 pr-2 font-mono align-top sm:py-4">{period.number}</td>
+									<td class="py-3 pr-2 align-top sm:py-4">
+										<div class="line-clamp-2 break-words font-medium" title={period.course || period.name}>
+											{period.course || period.name || `Period ${period.number}`}
+										</div>
+									</td>
+									<td class="py-3 pr-2 align-top text-muted-foreground sm:py-4">
+										<div class="line-clamp-2 break-words">{period.staff || '-'}</div>
+									</td>
+									<td class="py-3 align-top text-muted-foreground sm:py-4">
+										<div class="line-clamp-3 break-words">{period.reason || period.name || absence.reason || '-'}</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+			</details>
+		))}
+	</div>
+</DashboardLayout>
+
+<style>
+	details > summary::-webkit-details-marker {
+		display: none;
+	}
+
+	#attendance-summary-chart {
+		display: block;
+		width: 100% !important;
+		max-width: 100%;
+	}
+
+	.attendance-card:hover {
+		border-color: color-mix(in oklab, var(--border) 70%, white 20%);
+	}
+
+	.attendance-card[open] .attendance-toggle {
+		transform: rotate(180deg);
+		background: color-mix(in oklab, var(--card) 82%, white 6%);
+	}
+
+</style>
+
+<script>
+	import Chart from 'chart.js/auto'
+
+	const MAX_ATTENDANCE_CHART_RETRIES = 6
+	let attendanceChart
+	let attendanceChartResizeTimer
+
+	const buildAttendanceChart = (attempt = 0) => {
+		const canvas = document.getElementById('attendance-summary-chart')
+		if (!(canvas instanceof HTMLCanvasElement)) {
+			if (attempt < MAX_ATTENDANCE_CHART_RETRIES) {
+				window.setTimeout(() => buildAttendanceChart(attempt + 1), 180)
+			}
+			return
+		}
+
+		const rows = JSON.parse(canvas.dataset.rows || '[]')
+		if (!rows.length) return
+
+		try {
+			const style = getComputedStyle(document.documentElement)
+			const fontColor = style.getPropertyValue('--gn-font-2').trim() || '#a1a1aa'
+			const gridColor = style.getPropertyValue('--gn-bg-3').trim() || 'rgba(255,255,255,0.08)'
+			const width = window.innerWidth || 1280
+			const periodCount = rows.length
+			const compact = width < 900
+			const barThickness = compact ? Math.max(20, Math.min(42, Math.floor((width - 180) / Math.max(periodCount, 1)))) : 102
+			const maxBarThickness = compact ? 44 : 112
+
+			Chart.defaults.font.family = 'Geist, Segoe UI, sans-serif'
+			Chart.defaults.font.weight = '500'
+			Chart.defaults.font.size = 12
+			Chart.defaults.color = fontColor
+
+			attendanceChart?.destroy()
+			attendanceChart = new Chart(canvas, {
+				type: 'bar',
+				data: {
+					labels: rows.map((row) => `Period ${row.number}`),
+					datasets: [
+						{ label: 'Activities', data: rows.map((row) => row.activities), backgroundColor: '#34d399', stack: 'attendance', borderWidth: 0, borderSkipped: false, barThickness, maxBarThickness, categoryPercentage: compact ? 0.72 : 0.88, barPercentage: compact ? 0.78 : 0.92 },
+						{ label: 'Excused', data: rows.map((row) => row.excused), backgroundColor: '#86efac', stack: 'attendance', borderWidth: 0, borderSkipped: false, barThickness, maxBarThickness, categoryPercentage: compact ? 0.72 : 0.88, barPercentage: compact ? 0.78 : 0.92 },
+						{ label: 'Tardies', data: rows.map((row) => row.tardies), backgroundColor: '#4ade80', stack: 'attendance', borderWidth: 0, borderSkipped: false, barThickness, maxBarThickness, categoryPercentage: compact ? 0.72 : 0.88, barPercentage: compact ? 0.78 : 0.92 },
+						{ label: 'Unexcused', data: rows.map((row) => row.unexcused), backgroundColor: '#22c55e', stack: 'attendance', borderWidth: 0, borderSkipped: false, barThickness, maxBarThickness, categoryPercentage: compact ? 0.72 : 0.88, barPercentage: compact ? 0.78 : 0.92 },
+						{ label: 'Unexcused Tardies', data: rows.map((row) => row.unexcusedTardies), backgroundColor: '#166534', stack: 'attendance', borderWidth: 0, borderSkipped: false, borderRadius: { topLeft: 4, topRight: 4 }, barThickness, maxBarThickness, categoryPercentage: compact ? 0.72 : 0.88, barPercentage: compact ? 0.78 : 0.92 }
+					]
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					animation: { duration: 260 },
+					plugins: {
+						legend: { display: false },
+						tooltip: {
+							backgroundColor: '#16161c',
+							borderColor: 'rgba(255,255,255,0.08)',
+							borderWidth: 1,
+							padding: 10,
+							displayColors: true
+						}
+					},
+					scales: {
+						x: {
+							stacked: true,
+							grid: { display: false },
+							border: { display: false },
+							ticks: { color: fontColor, padding: 10 }
+						},
+						y: {
+							stacked: true,
+							beginAtZero: true,
+							grid: { color: gridColor, drawBorder: false },
+							border: { display: false },
+							ticks: { display: false, precision: 0 }
+						}
+					}
+				}
+			})
+		} catch (error) {
+			if (attempt < MAX_ATTENDANCE_CHART_RETRIES) {
+				window.setTimeout(() => buildAttendanceChart(attempt + 1), 180)
+			} else {
+				console.error('Attendance chart failed to load after retries.', error)
+			}
+		}
+	}
+
+	const scheduleAttendanceChartBuild = () => {
+		window.clearTimeout(attendanceChartResizeTimer)
+		attendanceChartResizeTimer = window.setTimeout(() => buildAttendanceChart(), 120)
+	}
+
+	buildAttendanceChart()
+	window.addEventListener('resize', scheduleAttendanceChartBuild)
+	window.addEventListener('astro:page-load', scheduleAttendanceChartBuild)
+</script>

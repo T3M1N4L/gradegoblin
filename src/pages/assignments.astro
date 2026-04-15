@@ -1,0 +1,60 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const assignments = data.selected?.assignments ?? []
+---
+<DashboardLayout title="Assignments" currentPath="/assignments" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod} showPeriodSelector={true}>
+	<div class="mb-4 flex justify-end">
+		<input id="assignment-search" type="text" placeholder="Search assignments" class="h-10 w-full max-w-sm rounded-xl border border-input bg-background px-3 text-sm" />
+	</div>
+	<section class="w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60" transition:name="recent-assignments-panel">
+		<div class="overflow-x-auto p-6">
+			<table id="assignment-table" class="w-full text-left text-sm">
+				<thead class="text-muted-foreground">
+					<tr>
+						<th class="pb-3 font-medium">Assignment</th>
+						<th class="pb-3 font-medium">Course</th>
+						<th class="pb-3 font-medium">Category</th>
+						<th class="pb-3 font-medium">Due</th>
+						<th class="pb-3 text-right font-medium">Grade</th>
+					</tr>
+				</thead>
+				<tbody>
+					{assignments.map((assignment) => (
+						<tr class="assignment-row border-t border-border/60">
+							<td class="py-4">
+								<div class="font-medium">{assignment.Measure}</div>
+								{assignment.Notes && <div class="text-xs text-muted-foreground">{assignment.Notes}</div>}
+							</td>
+							<td class="py-4 text-muted-foreground">{assignment.course}</td>
+							<td class="py-4 text-muted-foreground">{assignment.Type}</td>
+							<td class="py-4 font-mono text-muted-foreground">{assignment.DueDate}</td>
+							<td class="py-4 text-right">
+								<div class="font-mono font-semibold" style={assignment.style}>{assignment.percent}</div>
+								<div class:list={['text-xs text-muted-foreground', !assignment.isMissing && 'font-mono']}>{assignment.isMissing ? 'Missing' : assignment.score}</div>
+							</td>
+						</tr>
+					))}
+				</tbody>
+			</table>
+		</div>
+	</section>
+	<script is:inline>
+		(() => {
+			const searchInput = document.getElementById('assignment-search');
+			const rows = Array.from(document.querySelectorAll('.assignment-row'));
+			if (!(searchInput instanceof HTMLInputElement)) return;
+
+			searchInput.oninput = () => {
+				const query = searchInput.value.toLowerCase().trim();
+				rows.forEach((row) => {
+					row.style.display = !query || row.textContent.toLowerCase().includes(query) ? '' : 'none';
+				});
+			};
+		})();
+	</script>
+</DashboardLayout>

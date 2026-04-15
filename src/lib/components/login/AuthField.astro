@@ -1,0 +1,27 @@
+---
+const {
+	id,
+	label,
+	type = 'text',
+	placeholder = '',
+	autocomplete,
+	inputmode,
+	maxlength,
+	value,
+	class: className = ''
+} = Astro.props;
+---
+
+<label for={id} class:list={['grid gap-2', className]}>
+	<span class="text-sm font-medium text-foreground">{label}</span>
+	<input
+		id={id}
+		type={type}
+		placeholder={placeholder}
+		autocomplete={autocomplete}
+		inputmode={inputmode}
+		maxlength={maxlength}
+		value={value}
+		class="flex h-12 w-full rounded-full border border-border/80 bg-background px-4 py-2 text-sm text-foreground ring-offset-background transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+	/>
+</label>

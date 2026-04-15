@@ -1,0 +1,659 @@
+---
+import { ViewTransitions } from 'astro:transitions'
+import '../styles/globals.css'
+import AuthShell from '../lib/components/login/AuthShell.astro'
+
+if (Astro.locals.user) {
+	return Astro.redirect('/')
+}
+---
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Login - GradeGoblin</title>
+		<meta name="theme-color" content="#13161b" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+		<meta name="apple-mobile-web-app-title" content="GradeGoblin" />
+		<link rel="manifest" href="/manifest.json" />
+		<link rel="icon" href="/favicon-64.png?v=2" type="image/png" />
+		<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2" />
+		<link rel="stylesheet" href="/font/font.css" />
+		<ViewTransitions />
+		<script is:inline>
+			if ('serviceWorker' in navigator) {
+				const isLocalhost =
+					window.location.hostname === 'localhost' ||
+					window.location.hostname === '127.0.0.1';
+
+				window.addEventListener('load', () => {
+					if (isLocalhost) {
+						navigator.serviceWorker.getRegistrations().then((registrations) => {
+							registrations.forEach((registration) => registration.unregister());
+						});
+						if ('caches' in window) {
+							caches.keys().then((keys) => {
+								keys.forEach((key) => caches.delete(key));
+							});
+						}
+						return;
+					}
+
+					navigator.serviceWorker.register('/sw.js').catch(() => {});
+				});
+			}
+		</script>
+		<script is:inline>
+			(() => {
+				try {
+					const raw = localStorage.getItem('gradegoblin-settings');
+					const theme = raw ? JSON.parse(raw).theme ?? 'amoled' : 'amoled';
+					document.documentElement.setAttribute('data-theme', theme);
+					document.documentElement.classList[theme === 'light' ? 'remove' : 'add']('dark');
+				} catch {
+					document.documentElement.setAttribute('data-theme', 'amoled');
+					document.documentElement.classList.add('dark');
+				}
+			})();
+		</script>
+	</head>
+	<body class="h-full bg-background text-foreground">
+		<AuthShell>
+			<form id="login-form" class="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black px-5 py-5 shadow-[0_30px_80px_rgba(0,0,0,0.5)] backdrop-blur-2xl sm:px-6 sm:py-6">
+					<div class="pointer-events-none absolute inset-x-6 top-0 h-px bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.35),transparent)]"></div>
+
+					<div class="grid gap-4 lg:grid-cols-[0.96fr_1.04fr]">
+						<section class="rounded-[1.5rem] border border-white/8 bg-black p-4 sm:p-5">
+							<div class="space-y-5">
+								<div class="flex flex-col items-start gap-3">
+									<img src="/app-logo.png" alt="GradeGoblin logo" class="h-16 w-16 rounded-[1.25rem] object-cover" />
+									<div class="space-y-1">
+										<p class="m-0 text-lg font-semibold tracking-tight text-foreground">GradeGoblin</p>
+										<p class="m-0 text-sm leading-6 text-muted-foreground">
+											A cleaner StudentVUE interface for checking school information without the usual portal clutter.
+										</p>
+									</div>
+								</div>
+
+								<button
+									id="district-picker-button"
+									type="button"
+									class="block w-full rounded-[1.25rem] border border-white/10 bg-black px-4 py-3.5 text-left transition-colors duration-200 hover:bg-white/[0.03]"
+								>
+									<div class="space-y-1">
+										<p class="m-0 text-[0.68rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">District</p>
+										<p id="selected-district-name" class="text-base font-semibold text-foreground">No district selected</p>
+										<p id="selected-district-address" class="text-sm leading-5 text-muted-foreground">
+											Search by ZIP or enter a custom district URL.
+										</p>
+									</div>
+								</button>
+
+								<p class="m-0 text-xs leading-5 text-muted-foreground/90">
+									Your device connects directly to StudentVUE. GradeGoblin never sees your password or grades.
+								</p>
+							</div>
+						</section>
+
+						<section class="rounded-[1.5rem] border border-white/8 bg-black p-4 sm:p-5">
+							<div class="space-y-4">
+								<div class="space-y-1">
+									<p class="m-0 text-sm leading-6 text-muted-foreground">
+										Use your school credentials to continue.
+									</p>
+								</div>
+
+								<div class="grid gap-3">
+									<label for="username" class="grid gap-2">
+										<span class="text-[0.76rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Student ID</span>
+										<input
+											id="username"
+											type="text"
+											placeholder="Enter your student ID"
+											autocomplete="username"
+											class="h-12 w-full rounded-[1.1rem] border border-white/10 bg-black px-4 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 focus:border-[hsl(154_95%_67%/0.5)] focus:bg-black focus:shadow-[0_0_0_4px_hsl(154_95%_67%/0.08)]"
+										/>
+									</label>
+
+									<label for="password" class="grid gap-2">
+										<span class="text-[0.76rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Password</span>
+										<input
+											id="password"
+											type="password"
+											placeholder="Enter your password"
+											autocomplete="current-password"
+											class="h-12 w-full rounded-[1.1rem] border border-white/10 bg-black px-4 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 focus:border-[hsl(154_95%_67%/0.5)] focus:bg-black focus:shadow-[0_0_0_4px_hsl(154_95%_67%/0.08)]"
+										/>
+									</label>
+								</div>
+
+								<p id="login-error" class="hidden rounded-[1.1rem] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"></p>
+
+						<button
+							id="login-button"
+							type="submit"
+							class="inline-flex h-12 w-full items-center justify-center rounded-[1.1rem] bg-[linear-gradient(180deg,hsl(154_95%_67%)_0%,hsl(154_92%_61%)_100%)] px-4 text-sm font-semibold text-black transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_12px_30px_hsl(154_95%_67%/0.2)] disabled:pointer-events-none disabled:opacity-50"
+						>
+							Continue
+						</button>
+
+								<p class="m-0 text-[10px] leading-5 text-muted-foreground/80">
+									StudentVUE is a registered trademark of Edupoint Educational Systems, LLC. This project is not affiliated with Edupoint or Synergy.
+								</p>
+							</div>
+						</section>
+					</div>
+				</form>
+
+			<div id="login-loading-overlay" class="loading-overlay pointer-events-none absolute inset-0 z-40 hidden items-center justify-center px-6">
+				<div class="loading-card w-full max-w-xs rounded-[1.4rem] border border-white/10 bg-black px-5 py-4 text-center shadow-[0_24px_60px_rgba(0,0,0,0.5)]">
+					<div class="mx-auto flex w-fit items-center gap-2">
+						<span class="loading-dot"></span>
+						<span class="loading-dot"></span>
+						<span class="loading-dot"></span>
+					</div>
+					<p class="mt-4 text-sm font-medium text-foreground">Loading your information...</p>
+				</div>
+			</div>
+
+			<div id="district-modal" class="modal-root fixed inset-0 z-50 hidden items-center justify-center px-4 py-6">
+				<button id="district-modal-backdrop" type="button" class="modal-backdrop absolute inset-0 bg-black/70 backdrop-blur-sm"></button>
+				<div class="modal-card relative z-10 w-full max-w-md rounded-[1.75rem] border border-white/10 bg-black p-5 shadow-[0_30px_80px_rgba(0,0,0,0.62)]">
+					<div class="flex items-start justify-between gap-4">
+						<div>
+							<p class="m-0 text-lg font-semibold text-foreground">Choose district</p>
+							<p class="mt-1 text-sm leading-6 text-muted-foreground">Search by ZIP or paste a custom district URL.</p>
+						</div>
+						<button id="close-district-modal" type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-lg text-foreground transition-colors hover:bg-white/[0.08]">
+							&times;
+						</button>
+					</div>
+
+					<div class="mt-5 inline-flex rounded-full border border-white/10 bg-white/[0.04] p-1">
+						<button
+							id="district-tab-search"
+							type="button"
+							class="district-tab-active rounded-full px-4 py-2 text-sm font-medium text-foreground"
+							data-mode="search"
+						>
+							Search
+						</button>
+						<button
+							id="district-tab-custom"
+							type="button"
+							class="rounded-full px-4 py-2 text-sm font-medium text-muted-foreground transition-colors"
+							data-mode="custom"
+						>
+							Custom URL
+						</button>
+					</div>
+
+					<div class="relative mt-5 min-h-[17.5rem]">
+						<div id="district-search-panel" class="mode-panel mode-panel-visible space-y-3">
+							<div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+								<label for="zip" class="grid gap-2">
+									<span class="text-[0.76rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">ZIP code</span>
+									<input
+										id="zip"
+										type="text"
+										inputmode="numeric"
+										maxlength="5"
+										placeholder="Enter ZIP code"
+										value=""
+										class="h-12 w-full rounded-[1.1rem] border border-white/10 bg-black px-4 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 focus:border-[hsl(154_95%_67%/0.5)] focus:bg-black focus:shadow-[0_0_0_4px_hsl(154_95%_67%/0.08)]"
+									/>
+								</label>
+								<button
+									id="search-button"
+									type="button"
+									class="inline-flex h-12 items-center justify-center rounded-[1.05rem] border border-white/10 bg-black px-5 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.03]"
+								>
+									Search
+								</button>
+							</div>
+							<p id="district-status" class="m-0 text-xs uppercase tracking-[0.16em] text-muted-foreground">Search by ZIP to find your district</p>
+							<p id="search-error" class="hidden rounded-[1rem] border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"></p>
+							<div id="district-list" class="max-h-48 space-y-2 overflow-y-auto pr-1"></div>
+						</div>
+
+						<div id="district-custom-panel" class="mode-panel mode-panel-hidden space-y-3">
+							<label for="district-url" class="grid gap-2">
+								<span class="text-[0.76rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground">District URL</span>
+								<input
+									id="district-url"
+									type="text"
+									value=""
+									placeholder="https://yourdistrict.edupoint.com/"
+									class="h-12 w-full rounded-[1.1rem] border border-white/10 bg-black px-4 text-sm text-foreground outline-none transition-[border-color,background-color,box-shadow] duration-200 placeholder:text-muted-foreground/70 focus:border-[hsl(154_95%_67%/0.5)] focus:bg-black focus:shadow-[0_0_0_4px_hsl(154_95%_67%/0.08)]"
+								/>
+							</label>
+							<p class="m-0 text-xs leading-5 text-muted-foreground">
+								Paste the direct StudentVUE district URL if search doesn't find your school.
+							</p>
+							<button
+								id="save-custom-url"
+								type="button"
+								class="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-black px-4 text-sm font-medium text-foreground transition-colors hover:bg-white/[0.03]"
+							>
+								Use this URL
+							</button>
+						</div>
+					</div>
+				</div>
+			</div>
+		</AuthShell>
+
+		<script is:inline>
+			const defaultDistrict = {
+				name: 'No district selected',
+				address: 'Search by ZIP or enter a custom district URL.',
+				url: '',
+				zipcode: ''
+			};
+
+			let selectedDistrict = { ...defaultDistrict };
+			let districts = [];
+			let useCustomUrl = false;
+			let hasSearched = false;
+			let searchLoading = false;
+			let loginLoading = false;
+			let modalAnimating = false;
+
+			const loginOverlayEl = document.getElementById('login-loading-overlay');
+			const modalEl = document.getElementById('district-modal');
+			const modalBackdropEl = document.getElementById('district-modal-backdrop');
+			const openModalButtonEl = document.getElementById('district-picker-button');
+			const closeModalButtonEl = document.getElementById('close-district-modal');
+			const searchTabEl = document.getElementById('district-tab-search');
+			const customTabEl = document.getElementById('district-tab-custom');
+			const searchPanelEl = document.getElementById('district-search-panel');
+			const customPanelEl = document.getElementById('district-custom-panel');
+			const districtNameEl = document.getElementById('selected-district-name');
+			const districtAddressEl = document.getElementById('selected-district-address');
+			const districtStatusEl = document.getElementById('district-status');
+			const searchErrorEl = document.getElementById('search-error');
+			const loginErrorEl = document.getElementById('login-error');
+			const districtListEl = document.getElementById('district-list');
+			const districtUrlEl = document.getElementById('district-url');
+			const saveCustomUrlEl = document.getElementById('save-custom-url');
+			const zipEl = document.getElementById('zip');
+			const searchButtonEl = document.getElementById('search-button');
+			const loginButtonEl = document.getElementById('login-button');
+			const usernameEl = document.getElementById('username');
+			const passwordEl = document.getElementById('password');
+			const formEl = document.getElementById('login-form');
+
+			function openDistrictModal(mode = 'search') {
+				if (modalAnimating) return;
+				useCustomUrl = mode === 'custom';
+				renderCustomUrlState();
+				modalAnimating = true;
+				modalEl.classList.remove('hidden');
+				modalEl.classList.add('flex');
+				requestAnimationFrame(() => {
+					modalEl.classList.add('is-open');
+					window.setTimeout(() => {
+						modalAnimating = false;
+					}, 260);
+				});
+			}
+
+			function closeDistrictModal() {
+				if (modalAnimating || modalEl.classList.contains('hidden')) return;
+				modalAnimating = true;
+				modalEl.classList.remove('is-open');
+				window.setTimeout(() => {
+					modalEl.classList.add('hidden');
+					modalEl.classList.remove('flex');
+					modalAnimating = false;
+				}, 220);
+			}
+
+			function renderSelectedDistrict() {
+				districtNameEl.textContent = selectedDistrict.name || defaultDistrict.name;
+				districtAddressEl.textContent = selectedDistrict.address || defaultDistrict.address;
+				districtUrlEl.value = selectedDistrict.url || '';
+			}
+
+			function renderDistrictStatus() {
+				if (searchLoading) {
+					districtStatusEl.textContent = 'Searching districts...';
+					return;
+				}
+				if (districts.length > 0) {
+					districtStatusEl.textContent = `${districts.length} district${districts.length === 1 ? '' : 's'} found`;
+					return;
+				}
+				if (hasSearched) {
+					districtStatusEl.textContent = 'No districts found yet';
+					return;
+				}
+				districtStatusEl.textContent = 'Search by ZIP or use a custom URL';
+			}
+
+			function renderSearchError(message = '') {
+				searchErrorEl.textContent = message;
+				searchErrorEl.classList.toggle('hidden', !message);
+			}
+
+			function renderLoginError(message = '') {
+				loginErrorEl.textContent = message;
+				loginErrorEl.classList.toggle('hidden', !message);
+			}
+
+			function renderLoginLoading() {
+				loginOverlayEl.classList.toggle('hidden', !loginLoading);
+				loginOverlayEl.classList.toggle('flex', loginLoading);
+				loginOverlayEl.classList.toggle('is-visible', loginLoading);
+				formEl.classList.toggle('opacity-40', loginLoading);
+			}
+
+			function renderSkeletons() {
+				districtListEl.innerHTML = Array.from({ length: 4 })
+					.map(
+						() => `
+						<div class="rounded-[1.2rem] border border-white/10 bg-white/[0.03] p-4">
+							<div class="h-5 w-36 rounded-full bg-white/10"></div>
+							<div class="mt-3 h-4 w-full rounded-full bg-white/10"></div>
+						</div>
+					`
+					)
+					.join('');
+			}
+
+			function renderDistricts() {
+				if (searchLoading) {
+					renderSkeletons();
+					return;
+				}
+
+				if (districts.length === 0) {
+					districtListEl.innerHTML = hasSearched
+						? '<div class="rounded-[1.1rem] border border-white/10 bg-white/[0.03] p-4 text-sm text-muted-foreground">No districts were found for that ZIP code.</div>'
+						: '';
+					return;
+				}
+
+				districtListEl.innerHTML = districts
+					.map((district) => {
+						const active = selectedDistrict.url.replace(/\/$/, '') === district.url.replace(/\/$/, '');
+						return `
+							<button
+								type="button"
+								data-url="${district.url}"
+								class="district-option w-full rounded-[1.2rem] border px-4 py-3.5 text-left transition-colors ${
+									active
+										? 'border-[hsl(154_95%_67%/0.45)] bg-[hsl(154_95%_67%/0.08)]'
+										: 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+								}"
+							>
+								<p class="m-0 font-medium text-foreground">${district.name}</p>
+								<p class="mt-1 text-sm leading-6 text-muted-foreground">${district.address}</p>
+							</button>
+						`;
+					})
+					.join('');
+
+				districtListEl.querySelectorAll('.district-option').forEach((button) => {
+					button.addEventListener('click', () => {
+						const district = districts.find((item) => item.url === button.dataset.url);
+						if (!district) return;
+						selectedDistrict = { ...district };
+						renderSelectedDistrict();
+						renderDistricts();
+						closeDistrictModal();
+					});
+				});
+			}
+
+			function renderCustomUrlState() {
+				searchPanelEl.classList.toggle('mode-panel-visible', !useCustomUrl);
+				searchPanelEl.classList.toggle('mode-panel-hidden', useCustomUrl);
+				customPanelEl.classList.toggle('mode-panel-visible', useCustomUrl);
+				customPanelEl.classList.toggle('mode-panel-hidden', !useCustomUrl);
+				searchTabEl.classList.toggle('district-tab-active', !useCustomUrl);
+				customTabEl.classList.toggle('district-tab-active', useCustomUrl);
+				searchTabEl.classList.toggle('text-foreground', !useCustomUrl);
+				customTabEl.classList.toggle('text-foreground', useCustomUrl);
+				searchTabEl.classList.toggle('text-muted-foreground', useCustomUrl);
+				customTabEl.classList.toggle('text-muted-foreground', !useCustomUrl);
+			}
+
+			async function searchDistricts() {
+				const zip = zipEl.value.trim();
+				hasSearched = true;
+				renderSearchError('');
+
+				if (!/^\d{5}$/.test(zip)) {
+					renderSearchError('Enter a valid 5 digit ZIP code.');
+					renderDistrictStatus();
+					renderDistricts();
+					return;
+				}
+
+				searchLoading = true;
+				renderDistrictStatus();
+				renderDistricts();
+				try {
+					const res = await fetch(`/api/districts/${zip}`);
+					const payload = await res.json();
+					if (!res.ok) throw new Error(payload?.error ?? 'District lookup failed');
+					districts = payload.districts ?? [];
+				} catch {
+					districts = [];
+					renderSearchError('District lookup failed. Try another ZIP or use a custom URL.');
+				} finally {
+					searchLoading = false;
+					renderDistrictStatus();
+					renderDistricts();
+				}
+			}
+
+			searchButtonEl.addEventListener('click', searchDistricts);
+			openModalButtonEl.addEventListener('click', () => openDistrictModal('search'));
+			closeModalButtonEl.addEventListener('click', closeDistrictModal);
+			modalBackdropEl.addEventListener('click', closeDistrictModal);
+			searchTabEl.addEventListener('click', () => {
+				useCustomUrl = false;
+				renderCustomUrlState();
+			});
+			customTabEl.addEventListener('click', () => {
+				useCustomUrl = true;
+				renderCustomUrlState();
+			});
+			zipEl.addEventListener('input', () => {
+				zipEl.value = zipEl.value.replace(/[^0-9]/g, '').slice(0, 5);
+			});
+			saveCustomUrlEl.addEventListener('click', () => {
+				const districtUrl = districtUrlEl.value.trim();
+				if (!districtUrl) {
+					renderSearchError('Paste a district URL first.');
+					return;
+				}
+				selectedDistrict = {
+					name: 'Custom district URL',
+					address: districtUrl,
+					url: districtUrl,
+					zipcode: ''
+				};
+				renderSearchError('');
+				renderSelectedDistrict();
+				closeDistrictModal();
+			});
+			document.addEventListener('keydown', (event) => {
+				if (event.key === 'Escape' && modalEl.classList.contains('flex')) {
+					closeDistrictModal();
+				}
+			});
+
+			formEl.addEventListener('submit', async (event) => {
+				event.preventDefault();
+				if (loginLoading) return;
+
+				const districtUrl = districtUrlEl.value.trim();
+				const username = usernameEl.value.trim();
+				const password = passwordEl.value;
+				renderLoginError('');
+
+				if (!districtUrl) {
+					renderLoginError('Please choose a district first.');
+					return;
+				}
+				if (!username) {
+					renderLoginError('Please enter a username.');
+					return;
+				}
+				if (!password) {
+					renderLoginError('Please enter a password.');
+					return;
+				}
+
+				loginLoading = true;
+				renderLoginLoading();
+				loginButtonEl.setAttribute('disabled', 'disabled');
+				loginButtonEl.textContent = 'Loading...';
+
+				try {
+					const res = await fetch('/api/login', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({ districtUrl, username, password })
+					});
+
+					if (!res.ok) {
+						const payload = await res.json().catch(() => ({}));
+						throw new Error(payload?.error ?? 'Invalid credentials');
+					}
+
+					window.location.href = '/';
+				} catch {
+					renderLoginError('Invalid credentials. Please check your district, username, and password.');
+				} finally {
+					loginLoading = false;
+					renderLoginLoading();
+					loginButtonEl.removeAttribute('disabled');
+					loginButtonEl.textContent = 'Continue';
+				}
+			});
+
+			renderSelectedDistrict();
+			renderDistrictStatus();
+			renderDistricts();
+			renderCustomUrlState();
+			renderLoginLoading();
+		</script>
+		<style is:inline>
+			.loading-overlay {
+				opacity: 0;
+				backdrop-filter: blur(10px);
+				background: hsl(0 0% 0% / 0.55);
+				transition: opacity 220ms ease;
+			}
+
+			.loading-overlay.is-visible {
+				opacity: 1;
+			}
+
+			.loading-card {
+				opacity: 0;
+				transform: translateY(16px) scale(0.98);
+				transition:
+					opacity 240ms ease,
+					transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+			}
+
+			.loading-overlay.is-visible .loading-card {
+				opacity: 1;
+				transform: translateY(0) scale(1);
+			}
+
+			.loading-dot {
+				height: 8px;
+				width: 8px;
+				border-radius: 9999px;
+				background: hsl(154 95% 67%);
+				animation: loading-bounce 0.9s ease-in-out infinite;
+			}
+
+			.loading-dot:nth-child(2) {
+				animation-delay: 0.12s;
+			}
+
+			.loading-dot:nth-child(3) {
+				animation-delay: 0.24s;
+			}
+
+			@keyframes loading-bounce {
+				0%,
+				80%,
+				100% {
+					opacity: 0.35;
+					transform: translateY(0) scale(0.9);
+				}
+				40% {
+					opacity: 1;
+					transform: translateY(-2px) scale(1);
+				}
+			}
+
+			.modal-root {
+				opacity: 0;
+				transition: opacity 220ms ease;
+			}
+
+			.modal-backdrop {
+				opacity: 0;
+				transition: opacity 220ms ease;
+			}
+
+			.modal-card {
+				opacity: 0;
+				transform: translateY(18px) scale(0.97);
+				transition:
+					opacity 240ms ease,
+					transform 240ms cubic-bezier(0.22, 1, 0.36, 1);
+			}
+
+			.modal-root.is-open {
+				opacity: 1;
+			}
+
+			.modal-root.is-open .modal-backdrop,
+			.modal-root.is-open .modal-card {
+				opacity: 1;
+			}
+
+			.modal-root.is-open .modal-card {
+				transform: translateY(0) scale(1);
+			}
+
+			.mode-panel {
+				position: absolute;
+				inset: 0;
+				transition:
+					opacity 200ms ease,
+					transform 200ms ease;
+			}
+
+			.mode-panel-visible {
+				opacity: 1;
+				transform: translateY(0);
+				pointer-events: auto;
+				position: relative;
+			}
+
+			.mode-panel-hidden {
+				opacity: 0;
+				transform: translateY(10px);
+				pointer-events: none;
+			}
+
+			.district-tab-active {
+				background: hsl(154 95% 67%);
+				color: hsl(0 0% 0%);
+			}
+		</style>
+	</body>
+</html>

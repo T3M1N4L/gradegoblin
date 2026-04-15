@@ -1,0 +1,7 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+return Astro.redirect('/')
+---

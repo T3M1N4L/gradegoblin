@@ -1,0 +1,244 @@
+---
+import DashboardLayout from '$layouts/DashboardLayout.astro'
+import { loadDashboard, readSelectedPeriod } from '$lib/server/dashboard'
+import { getAuthedClient } from '$lib/server/studentvue'
+
+const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+
+const parseDateValue = (value) => {
+	const date = new Date(String(value ?? '').replace(/ 00:00:00 AM$/i, ''))
+	return Number.isNaN(date.getTime()) ? null : date
+}
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+const period = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, period)
+const client = await getAuthedClient(Astro.locals)
+const documents = await client.getDocuments()
+
+const documentRows = toArray(
+	documents?.StudentDocumentDatas?.StudentDocumentData ??
+		documents?.StudentDocumentData ??
+		documents?.Documents?.Document ??
+		documents?.Document
+)
+	.map((document) => ({
+		comment: String(document?._DocumentComment ?? document?.DocumentComment ?? ''),
+		date: String(document?._DocumentDate ?? document?.DocumentDate ?? ''),
+		fileName: String(document?._DocumentFileName ?? document?.DocumentFileName ?? ''),
+		guid: String(document?._DocumentGU ?? document?.DocumentGU ?? ''),
+		type: String(document?._DocumentType ?? document?.DocumentType ?? '')
+	}))
+	.filter((document) => document.guid || document.comment || document.fileName || document.date)
+	.sort((a, b) => {
+		const aTime = parseDateValue(a.date)?.getTime() ?? 0
+		const bTime = parseDateValue(b.date)?.getTime() ?? 0
+		return bTime - aTime
+	})
+
+const typeThemes = [
+	{ border: 'border-sky-400/20', background: 'bg-sky-400/10', text: 'text-sky-300' },
+	{ border: 'border-emerald-400/20', background: 'bg-emerald-400/10', text: 'text-emerald-300' },
+	{ border: 'border-amber-400/20', background: 'bg-amber-400/10', text: 'text-amber-300' },
+	{ border: 'border-rose-400/20', background: 'bg-rose-400/10', text: 'text-rose-300' },
+	{ border: 'border-violet-400/20', background: 'bg-violet-400/10', text: 'text-violet-300' },
+	{ border: 'border-cyan-400/20', background: 'bg-cyan-400/10', text: 'text-cyan-300' }
+]
+
+const hashType = (value) =>
+	Array.from(String(value || '')).reduce((total, char) => total + char.charCodeAt(0), 0)
+
+const typeClassMap = {}
+for (const document of documentRows) {
+	const type = document.type || '-'
+	if (!typeClassMap[type]) {
+		typeClassMap[type] = typeThemes[hashType(type) % typeThemes.length]
+	}
+}
+---
+<DashboardLayout title="Documents" currentPath="/documents" student={data.student} periodDates={data.periodDates} selectedPeriod={data.selectedPeriod}>
+	<section class="w-full min-w-0 rounded-[2rem] border border-border/70 bg-card/60 p-6 shadow-[0_16px_44px_rgba(0,0,0,0.18)]">
+		{documentRows.length === 0 ? (
+			<div class="flex min-h-[14rem] flex-col items-center justify-center gap-3 text-center">
+				<div class="inline-flex h-12 w-12 items-center justify-center rounded-full border border-border/80 bg-background/70 text-muted-foreground">
+					<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-5 w-5">
+						<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+						<path d="M13 2v7h7"></path>
+						<path d="M9 15h6"></path>
+						<path d="M9 11h3"></path>
+					</svg>
+				</div>
+				<div>
+					<h2 class="text-lg font-semibold">No documents found</h2>
+					<p class="mt-1 text-sm text-muted-foreground">No student documents were returned for this account.</p>
+				</div>
+			</div>
+		) : (
+			<div class="space-y-5">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 class="text-lg font-semibold text-foreground">Documents</h2>
+						<p class="mt-1 text-sm text-muted-foreground">Search by name, type, or date.</p>
+					</div>
+					<label class="relative block w-full sm:max-w-xs">
+						<span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-muted-foreground">
+							<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+								<circle cx="11" cy="11" r="8"></circle>
+								<path d="m21 21-4.3-4.3"></path>
+							</svg>
+						</span>
+						<input
+							id="document-search"
+							type="search"
+							placeholder="Search documents"
+							class="h-11 w-full rounded-xl border border-border/70 bg-background/70 pl-10 pr-4 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-[#60a5fa]/70"
+						/>
+					</label>
+				</div>
+				<div id="documents-empty-search" class="hidden rounded-2xl border border-dashed border-border/70 bg-background/30 px-4 py-10 text-center">
+					<p class="text-sm font-medium text-foreground">No documents match that search.</p>
+					<p class="mt-1 text-sm text-muted-foreground">Try a file name, type, or date.</p>
+				</div>
+				<div class="w-full min-w-0 overflow-x-auto">
+				<table class="w-full table-auto text-left text-sm">
+					<thead class="text-muted-foreground">
+						<tr>
+							<th class="w-[18%] pb-3 pr-3 font-medium">Date</th>
+							<th class="pb-3 pr-3 font-medium">Type</th>
+							<th class="w-full pb-3 pr-3 font-medium">Name</th>
+							<th class="w-[12%] pb-3 text-right font-medium">Open</th>
+						</tr>
+					</thead>
+					<tbody>
+						{documentRows.map((document) => (
+							<tr
+								class="border-t border-border/60"
+								data-document-row
+								data-search={`${document.date} ${document.type} ${document.comment} ${document.fileName}`.toLowerCase()}
+							>
+								<td class="py-4 pr-3 align-top font-mono break-words">{document.date || '-'}</td>
+								<td class="py-4 pr-3 align-top whitespace-nowrap">
+									<span class:list={[
+										'my-0.5 inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium',
+										typeClassMap[document.type || '-']?.border,
+										typeClassMap[document.type || '-']?.background,
+										typeClassMap[document.type || '-']?.text
+									]}>
+										{document.type || '-'}
+									</span>
+								</td>
+								<td class="min-w-0 py-4 pr-3 align-top">
+									<div class="line-clamp-3 break-words font-medium" title={document.comment || document.fileName || 'Document'}>
+										{document.comment || document.fileName || 'Document'}
+									</div>
+								</td>
+								<td class="py-4 align-top text-right">
+									{document.guid ? (
+										<button
+											type="button"
+											data-document-download
+											data-document-guid={document.guid}
+											data-document-filename={document.fileName || document.comment || 'document.pdf'}
+											class="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/70 text-foreground transition-colors hover:border-border hover:bg-background"
+											aria-label={`Download ${document.comment || document.fileName || 'document'}`}
+										>
+											<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4">
+												<path d="M12 15V3"></path>
+												<path d="M17 10l-5 5-5-5"></path>
+												<path d="M5 21h14"></path>
+											</svg>
+										</button>
+									) : (
+										<span class="text-muted-foreground">-</span>
+									)}
+								</td>
+							</tr>
+						))}
+					</tbody>
+				</table>
+				</div>
+			</div>
+		)}
+	</section>
+</DashboardLayout>
+
+<script>
+	const searchInput = document.getElementById('document-search')
+	const rows = Array.from(document.querySelectorAll('[data-document-row]'))
+	const emptyState = document.getElementById('documents-empty-search')
+	const downloadButtons = Array.from(document.querySelectorAll('[data-document-download]'))
+
+	const toObjectUrl = (base64) => {
+		try {
+			const binary = atob(String(base64).replace(/\s/g, ''))
+			const bytes = new Uint8Array(binary.length)
+			for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i)
+			return URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
+		} catch (error) {
+			console.error('[documents decode]', error)
+			return null
+		}
+	}
+
+	if (searchInput && rows.length) {
+		const applyFilter = () => {
+			const query = String(searchInput.value || '').trim().toLowerCase()
+			let visibleCount = 0
+
+			for (const row of rows) {
+				const haystack = row.getAttribute('data-search') || ''
+				const visible = !query || haystack.includes(query)
+				row.toggleAttribute('hidden', !visible)
+				if (visible) visibleCount += 1
+			}
+
+			emptyState?.classList.toggle('hidden', visibleCount !== 0)
+		}
+
+		searchInput.addEventListener('input', applyFilter)
+	}
+
+	for (const button of downloadButtons) {
+		button.addEventListener('click', async () => {
+			const guid = button.getAttribute('data-document-guid')
+			const fallbackName = button.getAttribute('data-document-filename') || 'document.pdf'
+			if (!guid) return
+
+			try {
+				button.setAttribute('disabled', 'true')
+				const response = await fetch(`/api/documents/${guid}`)
+				if (!response.ok) throw new Error(`Download failed: ${response.status}`)
+				const json = await response.json()
+				const docNode = json?.StudentAttachedDocumentData?.DocumentDatas?.DocumentData ?? json?.Document ?? json
+				let base64 = docNode?.Base64Code ?? docNode?.Document?.Base64Code ?? json?.pdf ?? null
+				if (base64 && typeof base64 === 'object' && '$' in base64) base64 = base64.$
+				if (typeof base64 !== 'string' || base64.length < 20) {
+					throw new Error('Document contents unavailable')
+				}
+
+				const fileName =
+					docNode?._DocumentFileName ??
+					docNode?.DocumentFileName ??
+					docNode?._FileName ??
+					docNode?.FileName ??
+					docNode?.DocFileName ??
+					fallbackName
+
+				const objectUrl = toObjectUrl(base64) || `data:application/pdf;base64,${base64}`
+				const anchor = document.createElement('a')
+				anchor.href = objectUrl
+				anchor.download = fileName
+				document.body.appendChild(anchor)
+				anchor.click()
+				document.body.removeChild(anchor)
+				if (String(objectUrl).startsWith('blob:')) {
+					window.setTimeout(() => URL.revokeObjectURL(objectUrl), 5000)
+				}
+			} catch (error) {
+				console.error('[documents download]', error)
+			} finally {
+				button.removeAttribute('disabled')
+			}
+		})
+	}
+</script>

@@ -1,0 +1,50 @@
+---
+import DashboardLayout from '../../layouts/DashboardLayout.astro'
+import CourseWorkbench from '../../lib/components/CourseWorkbench.svelte'
+import LayoutPeriodSelect from '../../lib/components/LayoutPeriodSelect.svelte'
+import { loadDashboard, readSelectedPeriod } from '../../lib/server/dashboard'
+
+const resolveCoursePeriod = (course, fallbackIndex) => {
+	const raw = course?.Period ?? course?._Period
+	const parsed = Number(raw)
+	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackIndex + 1
+}
+
+if (!Astro.locals.user) return Astro.redirect('/login')
+
+const selectedReportingPeriod = readSelectedPeriod(Astro.cookies)
+const data = await loadDashboard(Astro.locals, selectedReportingPeriod)
+const requestedPeriod = Number(Astro.params.index)
+const courses = Array.isArray(data.selected?.Courses?.Course)
+	? data.selected.Courses.Course
+	: data.selected?.Courses?.Course
+		? [data.selected.Courses.Course]
+		: []
+const index = courses.findIndex((course, fallbackIndex) => resolveCoursePeriod(course, fallbackIndex) === requestedPeriod)
+const course = index >= 0 ? courses[index] : undefined
+
+if (!course) return Astro.redirect('/grades')
+
+const coursePeriod = resolveCoursePeriod(course, index)
+---
+<DashboardLayout
+	title={course?.Title ?? 'Period'}
+	currentPath="/grades"
+	student={data.student}
+	periodDates={data.periodDates}
+	selectedPeriod={data.selectedPeriod}
+	showPageHeader={false}
+>
+	<div class="mb-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+		<a href="/grades" class="inline-flex items-center text-sm text-muted-foreground transition-colors hover:text-foreground">&lt; Back to Grades</a>
+		{data.periodDates?.length > 0 && (
+			<LayoutPeriodSelect periodDates={data.periodDates} selectedPeriod={Number(data.selectedPeriod)} id="period-detail-select" client:load />
+		)}
+	</div>
+
+	<div transition:name="gradebook-panel">
+		<div transition:name={`course-card-${data.selectedPeriod}-${coursePeriod}`}>
+			<CourseWorkbench course={course} client:load />
+		</div>
+	</div>
+</DashboardLayout>
