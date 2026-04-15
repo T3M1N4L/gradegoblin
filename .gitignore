@@ -16,5 +16,6 @@ package/
 
 # local tooling
 .vercel/
+.wrangler/
 responses/
 .DS_Store

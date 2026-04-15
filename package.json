@@ -6,11 +6,13 @@
 		"dev": "astro dev",
 		"build": "astro build",
 		"preview": "astro preview",
+		"cf:dev": "wrangler dev",
+		"cf:deploy": "wrangler deploy",
 		"astro": "astro"
 	},
 	"dependencies": {
 		"@astrojs/svelte": "^5.7.0",
-		"@astrojs/node": "^8.3.4",
+		"@astrojs/cloudflare": "^8.1.0",
 		"@astrojs/tailwind": "^5.1.0",
 		"astro": "^4.16.0",
 		"bits-ui": "^0.21.16",
@@ -27,6 +29,7 @@
 	"devDependencies": {
 		"@astrojs/check": "^0.9.8",
 		"@types/cookie": "^0.6.0",
-		"typescript": "^5.9.3"
+		"typescript": "^5.9.3",
+		"wrangler": "4.10.0"
 	}
 }

@@ -1,14 +1,14 @@
 import { defineConfig } from 'astro/config'
 import svelte from '@astrojs/svelte'
 import tailwind from '@astrojs/tailwind'
-import node from '@astrojs/node'
+import cloudflare from '@astrojs/cloudflare'
 import path from 'path'
 import { fileURLToPath } from 'url'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 export default defineConfig({
-  adapter: node({ mode: 'standalone' }),
+  adapter: cloudflare(),
   devToolbar: {
     enabled: false
   },
